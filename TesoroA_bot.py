@@ -19,10 +19,15 @@ DEEPSEEK_API_KEY = "sk-7e2b6eb1c4ff4b4aa1046a6ae500a40e"
 ADMIN_USER_ID = 7097140504  # @famn25
 ADMIN_USERNAME = "famn25"
 
-# File di dati
-MAIN_SENTENCES_FILE = "/app/data/frases_principali.json"
+# Detecta el entorno y usa la ruta correcta
+if os.path.exists('/app'):
+    # Entorno de producción (Railway, Fly.io)
+    MAIN_SENTENCES_FILE = "/app/data/frases_principali.json"
+else:
+    # Entorno local (tu PC)
+    MAIN_SENTENCES_FILE = "frases_principali.json"
 
-# Stati di attesa per l'admin
+# Estados de attesa per l'admin
 waiting_for_file = {}  # {user_id: "frase"}
 
 # Numero massimo di variazioni possibili (1-50)
@@ -91,6 +96,9 @@ def pulisci_numero_dal_testo(testo: str) -> str:
 
 def caricare_frasi_principali() -> List[Dict]:
     """Carica le frasi principali dal file JSON"""
+    # Crea la cartella se non esiste
+    os.makedirs(os.path.dirname(MAIN_SENTENCES_FILE), exist_ok=True)
+    
     if not os.path.exists(MAIN_SENTENCES_FILE):
         return []
     with open(MAIN_SENTENCES_FILE, 'r', encoding='utf-8') as f:
@@ -98,11 +106,13 @@ def caricare_frasi_principali() -> List[Dict]:
 
 def salvare_frasi_principali(frasi: List[Dict]):
     """Salva le frasi principali nel file JSON"""
+    # Crea la cartella se non esiste
+    os.makedirs(os.path.dirname(MAIN_SENTENCES_FILE), exist_ok=True)
     with open(MAIN_SENTENCES_FILE, 'w', encoding='utf-8') as f:
         json.dump(frasi, f, ensure_ascii=False, indent=2)
 
 def ottenere_numeri_disponibili_threads(user_id: int, quantita_desiderata: int) -> List[int]:
-    """Ottiene i numeri delle variazioni - sempre un ciclo infinito che si reinizia"""
+    """Ottiene i numeri delle variazioni non ancora inviate all'utente"""
     if user_id not in user_threads_state:
         user_threads_state[user_id] = {
             "sent_numbers": set(),
@@ -112,7 +122,7 @@ def ottenere_numeri_disponibili_threads(user_id: int, quantita_desiderata: int) 
     inviati = user_threads_state[user_id]["sent_numbers"]
     disponibili = [n for n in range(1, MAX_VARIATIONS + 1) if n not in inviati]
     
-    # Se non ci sono numeri disponibili o abbiamo raggiunto il limite, resetta il ciclo
+    # Se tutti i numeri sono stati usati, ricomincia il ciclo
     if not disponibili:
         user_threads_state[user_id] = {
             "sent_numbers": set(),
@@ -453,7 +463,7 @@ async def aiuto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"⚠️ <b>IMPORTANTE:</b> Le variazioni NON si ripetono.\n\n"
         f"📌 <b>Esempi:</b>\n"
         f"• <code>/12threads</code> → 12 variazioni\n"
-        f"• <code>/30threads</code</code> → 30 variazioni\n"
+        f"• <code>/30threads</code> → 30 variazioni\n"
         f"• <code>/50threads</code> → 50 variazioni"
     )
     
@@ -474,8 +484,8 @@ async def aiuto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     """Funzione principale per avviare il bot"""
     
-    if not os.path.exists(MAIN_SENTENCES_FILE):
-        salvare_frasi_principali([])
+    # Crea il file delle frasi se non esiste
+    salvare_frasi_principali(caricare_frasi_principali())
     
     application = Application.builder().token(BOT_TOKEN).build()
     
@@ -509,8 +519,7 @@ def main():
     print("  • /reset_utente → reset progresso")
     print("  • /aiuto → guida")
     print("=" * 60)
-    print("✅ MESSAGGIO DI CONFERMA SENZA INFORMAZIONI CICLO")
-    print("✅ STATO UTENTE SENZA INFO RESIDUI")
+    print(f"📁 File frasi: {MAIN_SENTENCES_FILE}")
     print("=" * 60)
     
     application.run_polling()
