@@ -22,10 +22,13 @@ ADMIN_USERNAME = "famn25"
 # Detecta el entorno y usa la ruta correcta
 if os.path.exists('/app'):
     # Entorno de producción (Railway, Fly.io)
-    MAIN_SENTENCES_FILE = "/app/data/frases_principali.json"
+    DATA_FOLDER = "/app/data"
 else:
     # Entorno local (tu PC)
-    MAIN_SENTENCES_FILE = "frases_principali.json"
+    DATA_FOLDER = "."
+
+MAIN_SENTENCES_FILE = os.path.join(DATA_FOLDER, "frases_principali.json")
+USER_STATE_FILE = os.path.join(DATA_FOLDER, "user_state.json")
 
 # Estados de attesa per l'admin
 waiting_for_file = {}  # {user_id: "frase"}
@@ -44,8 +47,62 @@ logger = logging.getLogger(__name__)
 # STRUTTURE DATI
 # ======================
 
-# Per i thread (variazioni)
+# Per i thread (variazioni) - cache in memoria
 user_threads_state = {}
+
+# ======================
+# FUNZIONI PERSISTENZA STATO UTENTI
+# ======================
+
+def caricare_stato_utenti() -> Dict:
+    """Carica lo stato di tutti gli utenti dal file"""
+    os.makedirs(DATA_FOLDER, exist_ok=True)
+    if not os.path.exists(USER_STATE_FILE):
+        return {}
+    with open(USER_STATE_FILE, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+def salvare_stato_utenti(stato: Dict):
+    """Salva lo stato di tutti gli utenti nel file"""
+    os.makedirs(DATA_FOLDER, exist_ok=True)
+    with open(USER_STATE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(stato, f, ensure_ascii=False, indent=2)
+
+def inizializzare_stato_utente(user_id: int):
+    """Inizializza o recupera lo stato di un utente"""
+    stato = caricare_stato_utenti()
+    user_id_str = str(user_id)
+    
+    if user_id_str not in stato:
+        stato[user_id_str] = {
+            "sent_numbers": [],
+            "total_sent": 0
+        }
+        salvare_stato_utenti(stato)
+    
+    # Convertir la lista a set para usarla en memoria
+    if user_id not in user_threads_state:
+        user_threads_state[user_id] = {
+            "sent_numbers": set(stato[user_id_str]["sent_numbers"]),
+            "total_sent": stato[user_id_str]["total_sent"]
+        }
+
+def salvare_stato_utente_specifico(user_id: int):
+    """Salva lo stato di un singolo utente"""
+    if user_id in user_threads_state:
+        stato = caricare_stato_utenti()
+        user_id_str = str(user_id)
+        stato[user_id_str] = {
+            "sent_numbers": list(user_threads_state[user_id]["sent_numbers"]),
+            "total_sent": user_threads_state[user_id]["total_sent"]
+        }
+        salvare_stato_utenti(stato)
+
+def resettare_tutti_gli_utenti():
+    """Resetta lo stato di tutti gli utenti"""
+    global user_threads_state
+    user_threads_state = {}
+    salvare_stato_utenti({})
 
 # ======================
 # FUNZIONI THREAD (VARIAZIONI)
@@ -96,8 +153,7 @@ def pulisci_numero_dal_testo(testo: str) -> str:
 
 def caricare_frasi_principali() -> List[Dict]:
     """Carica le frasi principali dal file JSON"""
-    # Crea la cartella se non esiste
-    os.makedirs(os.path.dirname(MAIN_SENTENCES_FILE), exist_ok=True)
+    os.makedirs(DATA_FOLDER, exist_ok=True)
     
     if not os.path.exists(MAIN_SENTENCES_FILE):
         return []
@@ -106,18 +162,13 @@ def caricare_frasi_principali() -> List[Dict]:
 
 def salvare_frasi_principali(frasi: List[Dict]):
     """Salva le frasi principali nel file JSON"""
-    # Crea la cartella se non esiste
-    os.makedirs(os.path.dirname(MAIN_SENTENCES_FILE), exist_ok=True)
+    os.makedirs(DATA_FOLDER, exist_ok=True)
     with open(MAIN_SENTENCES_FILE, 'w', encoding='utf-8') as f:
         json.dump(frasi, f, ensure_ascii=False, indent=2)
 
 def ottenere_numeri_disponibili_threads(user_id: int, quantita_desiderata: int) -> List[int]:
     """Ottiene i numeri delle variazioni non ancora inviate all'utente"""
-    if user_id not in user_threads_state:
-        user_threads_state[user_id] = {
-            "sent_numbers": set(),
-            "total_sent": 0
-        }
+    inizializzare_stato_utente(user_id)
     
     inviati = user_threads_state[user_id]["sent_numbers"]
     disponibili = [n for n in range(1, MAX_VARIATIONS + 1) if n not in inviati]
@@ -128,20 +179,20 @@ def ottenere_numeri_disponibili_threads(user_id: int, quantita_desiderata: int) 
             "sent_numbers": set(),
             "total_sent": 0
         }
+        salvare_stato_utente_specifico(user_id)
         disponibili = list(range(1, MAX_VARIATIONS + 1))
     
     return disponibili[:quantita_desiderata]
 
 def marcare_come_inviate_threads(user_id: int, numeri: List[int]):
     """Marca i numeri delle variazioni come inviati"""
-    if user_id not in user_threads_state:
-        user_threads_state[user_id] = {
-            "sent_numbers": set(),
-            "total_sent": 0
-        }
+    inizializzare_stato_utente(user_id)
+    
     for num in numeri:
         user_threads_state[user_id]["sent_numbers"].add(num)
         user_threads_state[user_id]["total_sent"] += 1
+    
+    salvare_stato_utente_specifico(user_id)
 
 async def generare_variazione(frase_testo: str, frase_numero: int, variazione_num: int) -> str:
     """Genera una variazione della frase usando l'API DeepSeek"""
@@ -275,8 +326,7 @@ async def ricevere_file_frase(update: Update, context: ContextTypes.DEFAULT_TYPE
         salvare_frasi_principali(frasi)
         
         # Reset dello stato di tutti gli utenti
-        for uid in list(user_threads_state.keys()):
-            user_threads_state[uid] = {"sent_numbers": set(), "total_sent": 0}
+        resettare_tutti_gli_utenti()
         
         del waiting_for_file[user_id]
         
@@ -338,6 +388,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     frasi = caricare_frasi_principali()
     
+    # Inizializzare stato utente
+    inizializzare_stato_utente(user_id)
+    totale_ricevute = user_threads_state[user_id]["total_sent"]
+    
     await update.message.reply_text(
         f"Ciao @{username}! 👋\n\n"
         f"📝 <b>Come funziona:</b>\n"
@@ -348,6 +402,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"• <code>/30threads</code> → 30 thread\n"
         f"• <code>/50threads</code> → 50 thread\n\n"
         f"⚠️ <b>IMPORTANTE:</b> Le variazioni NON si ripetono. Sono pronte da copiare e postare direttamente.\n\n"
+        f"📊 <b>Il tuo progresso:</b>\n"
+        f"• Variazioni ricevute finora: {totale_ricevute}\n\n"
         f"💡 <b>Comandi utili:</b>\n"
         f"• <code>/stato</code> - Visualizza il tuo progresso\n"
         f"• <code>/reset_utente</code> - Resetta il tuo progresso\n"
@@ -406,30 +462,33 @@ async def thread_comando(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ Errore nella generazione della variazione {num}")
     
     marcare_come_inviate_threads(user_id, inviate)
+    totale_ricevute = user_threads_state[user_id]["total_sent"]
     
-    # Messaggio di conferma SEMPLICE senza informazioni sul ciclo
+    # Messaggio di conferma con informazioni sul progresso
     await update.message.reply_text(
         f"✅ <b>Variazioni inviate!</b>\n\n"
-        f"📨 Inviate: {len(inviate)}",
+        f"📨 Inviate in questa sessione: {len(inviate)}\n"
+        f"📊 Totale variazioni ricevute: {totale_ricevute}\n"
+        f"🔄 Il ciclo si resetta automaticamente ogni {MAX_VARIATIONS} variazioni",
         parse_mode="HTML"
     )
     
-    logger.info(f"Utente {username} ha ricevuto {len(inviate)} variazioni")
+    logger.info(f"Utente {username} ha ricevuto {len(inviate)} variazioni. Totale: {totale_ricevute}")
 
 async def stato(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Comando /stato - Mostra il progresso dell'utente"""
     user = update.effective_user
     user_id = user.id
     
-    if user_id not in user_threads_state:
-        await update.message.reply_text("Non hai ancora ricevuto nessuna variazione.")
-        return
-    
+    inizializzare_stato_utente(user_id)
     totale = user_threads_state[user_id]["total_sent"]
+    rimanenti_nel_ciclo = MAX_VARIATIONS - (totale % MAX_VARIATIONS)
     
     await update.message.reply_text(
         f"📊 <b>Il tuo stato</b>\n\n"
-        f"• Variazioni ricevute: {totale}\n\n"
+        f"• Variazioni ricevute in totale: {totale}\n"
+        f"• Variazioni rimanenti nel ciclo attuale: {rimanenti_nel_ciclo}\n"
+        f"• Il ciclo si resetta ogni {MAX_VARIATIONS} variazioni\n\n"
         f"💡 Usa /reset_utente per resettare il tuo progresso",
         parse_mode="HTML"
     )
@@ -441,6 +500,7 @@ async def reset_utente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = user.username or user.first_name
     
     user_threads_state[user_id] = {"sent_numbers": set(), "total_sent": 0}
+    salvare_stato_utente_specifico(user_id)
     
     await update.message.reply_text("🔄 Il tuo progresso è stato resettato. Ora puoi ricominciare da capo!")
     
@@ -460,7 +520,7 @@ async def aiuto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"• <code>/stato</code> - Visualizza il tuo progresso\n"
         f"• <code>/reset_utente</code> - Resetta il tuo progresso\n"
         f"• <code>/aiuto</code> - Mostra questa guida\n\n"
-        f"⚠️ <b>IMPORTANTE:</b> Le variazioni NON si ripetono.\n\n"
+        f"⚠️ <b>IMPORTANTE:</b> Le variazioni NON si ripetono. Il bot ricorda quante ne hai già ricevute.\n\n"
         f"📌 <b>Esempi:</b>\n"
         f"• <code>/12threads</code> → 12 variazioni\n"
         f"• <code>/30threads</code> → 30 variazioni\n"
@@ -484,8 +544,12 @@ async def aiuto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     """Funzione principale per avviare il bot"""
     
-    # Crea il file delle frasi se non esiste
-    salvare_frasi_principali(caricare_frasi_principali())
+    # Crea la cartella data se non esiste
+    os.makedirs(DATA_FOLDER, exist_ok=True)
+    
+    # Carica le frasi (crea file se non esiste)
+    if not os.path.exists(MAIN_SENTENCES_FILE):
+        salvare_frasi_principali([])
     
     application = Application.builder().token(BOT_TOKEN).build()
     
@@ -506,7 +570,7 @@ def main():
     application.add_handler(MessageHandler(filters.Document.ALL, ricevere_file_frase))
     
     print("=" * 60)
-    print("✅ BOT DI VARIAZIONI - SOLO TESTO")
+    print("✅ BOT DI VARIAZIONI - CON PERSISTENZA")
     print("=" * 60)
     print(f"🤖 Bot: @TesoroA_bot")
     print(f"👑 Admin: @{ADMIN_USERNAME}")
@@ -519,7 +583,12 @@ def main():
     print("  • /reset_utente → reset progresso")
     print("  • /aiuto → guida")
     print("=" * 60)
-    print(f"📁 File frasi: {MAIN_SENTENCES_FILE}")
+    print(f"📁 Cartella dati: {DATA_FOLDER}")
+    print(f"📄 File frasi: {MAIN_SENTENCES_FILE}")
+    print(f"👥 File stato utenti: {USER_STATE_FILE}")
+    print("=" * 60)
+    print("✅ Lo stato degli utenti è PERSISTENTE tra i riavvii")
+    print("✅ Le variazioni NON si ripetono MAI")
     print("=" * 60)
     
     application.run_polling()
