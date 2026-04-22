@@ -197,7 +197,7 @@ REGOLE:
 3. Cambia le parole, non il senso
 4. Questa è la variazione numero {variazione_num}
 5. Mantieni il tono giovane (18 anni) e il contesto italiano
-6. La modella è CINESE fittizia che vive in ITALIA
+6. La modella è CINESE fittizia che vive in ITALIA, si chiama MILA, usa sempre il nome MILA, non cambiare mai il nome
 7. Parla sempre in femminile, mai riferimento maschile
 8. NON includere il numero della frase originale
 9. Rispondi SOLO con il testo della variazione, nient'altro"""
