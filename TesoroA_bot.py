@@ -21,10 +21,8 @@ ADMIN_USERNAME = "famn25"
 
 # Detecta el entorno y usa la ruta correcta
 if os.path.exists('/app'):
-    # Entorno de producción (Railway, Fly.io)
     DATA_FOLDER = "/app/data"
 else:
-    # Entorno local (tu PC)
     DATA_FOLDER = "."
 
 MAIN_SENTENCES_FILE = os.path.join(DATA_FOLDER, "frases_principali.json")
@@ -167,13 +165,18 @@ def salvare_frasi_principali(frasi: List[Dict]):
         json.dump(frasi, f, ensure_ascii=False, indent=2)
 
 def ottenere_numeri_disponibili_threads(user_id: int, quantita_desiderata: int) -> List[int]:
-    """Ottiene i numeri delle variazioni non ancora inviate all'utente"""
+    """Ottiene numeri CASUALI di variazioni non ancora inviate all'utente"""
     inizializzare_stato_utente(user_id)
     
     inviati = user_threads_state[user_id]["sent_numbers"]
-    disponibili = [n for n in range(1, MAX_VARIATIONS + 1) if n not in inviati]
     
-    # Se tutti i numeri sono stati usati, ricomincia il ciclo
+    # Numeri totali disponibili (1-50)
+    tutti_i_numeri = set(range(1, MAX_VARIATIONS + 1))
+    
+    # Numeri non ancora inviati
+    disponibili = list(tutti_i_numeri - inviati)
+    
+    # Se non ci sono numeri disponibili o abbiamo raggiunto il limite, resetta il ciclo
     if not disponibili:
         user_threads_state[user_id] = {
             "sent_numbers": set(),
@@ -182,6 +185,10 @@ def ottenere_numeri_disponibili_threads(user_id: int, quantita_desiderata: int) 
         salvare_stato_utente_specifico(user_id)
         disponibili = list(range(1, MAX_VARIATIONS + 1))
     
+    # Mezclar aleatoriamente
+    random.shuffle(disponibili)
+    
+    # Devolver la cantidad deseada (aleatoria)
     return disponibili[:quantita_desiderata]
 
 def marcare_come_inviate_threads(user_id: int, numeri: List[int]):
@@ -401,7 +408,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"• <code>/12threads</code> → 12 thread (ogni thread in un messaggio separato)\n"
         f"• <code>/30threads</code> → 30 thread\n"
         f"• <code>/50threads</code> → 50 thread\n\n"
-        f"⚠️ <b>IMPORTANTE:</b> Le variazioni NON si ripetono. Sono pronte da copiare e postare direttamente.\n\n"
+        f"⚠️ <b>IMPORTANTE:</b> Le variazioni sono CASUALI e NON si ripetono fino ad esaurimento delle 50.\n\n"
         f"📊 <b>Il tuo progresso:</b>\n"
         f"• Variazioni ricevute finora: {totale_ricevute}\n\n"
         f"💡 <b>Comandi utili:</b>\n"
@@ -440,7 +447,7 @@ async def thread_comando(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await notificare_admin(context, f"👑 Hai richiesto {len(numeri_disponibili)} variazioni (come admin)", is_admin_action=True)
     
     await update.message.reply_text(
-        f"🔄 Generazione di {len(numeri_disponibili)} variazioni in corso...",
+        f"🔄 Generazione di {len(numeri_disponibili)} variazioni casuali...",
         parse_mode="HTML"
     )
     
@@ -463,13 +470,13 @@ async def thread_comando(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     marcare_come_inviate_threads(user_id, inviate)
     totale_ricevute = user_threads_state[user_id]["total_sent"]
+    rimanenti_nel_ciclo = MAX_VARIATIONS - (totale_ricevute % MAX_VARIATIONS)
     
-    # Messaggio di conferma con informazioni sul progresso
     await update.message.reply_text(
         f"✅ <b>Variazioni inviate!</b>\n\n"
         f"📨 Inviate in questa sessione: {len(inviate)}\n"
         f"📊 Totale variazioni ricevute: {totale_ricevute}\n"
-        f"🔄 Il ciclo si resetta automaticamente ogni {MAX_VARIATIONS} variazioni",
+        f"🎲 Prossime variazioni: {rimanenti_nel_ciclo} disponibili prima del reset",
         parse_mode="HTML"
     )
     
@@ -516,15 +523,15 @@ async def aiuto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     messaggio_base = (
         f"📖 <b>Guida del Bot</b>\n\n"
         f"<b>Comandi utente:</b>\n"
-        f"• <code>/Nthreads</code> - Ricevi N variazioni di testo (es. /12threads)\n"
+        f"• <code>/Nthreads</code> - Ricevi N variazioni CASUALI di testo (es. /12threads)\n"
         f"• <code>/stato</code> - Visualizza il tuo progresso\n"
         f"• <code>/reset_utente</code> - Resetta il tuo progresso\n"
         f"• <code>/aiuto</code> - Mostra questa guida\n\n"
-        f"⚠️ <b>IMPORTANTE:</b> Le variazioni NON si ripetono. Il bot ricorda quante ne hai già ricevute.\n\n"
+        f"⚠️ <b>IMPORTANTE:</b> Le variazioni sono CASUALI e NON si ripetono fino ad esaurimento delle 50.\n\n"
         f"📌 <b>Esempi:</b>\n"
-        f"• <code>/12threads</code> → 12 variazioni\n"
-        f"• <code>/30threads</code> → 30 variazioni\n"
-        f"• <code>/50threads</code> → 50 variazioni"
+        f"• <code>/12threads</code> → 12 variazioni casuali\n"
+        f"• <code>/30threads</code> → 30 variazioni casuali\n"
+        f"• <code>/50threads</code> → 50 variazioni casuali"
     )
     
     if user_id == ADMIN_USER_ID:
@@ -570,25 +577,23 @@ def main():
     application.add_handler(MessageHandler(filters.Document.ALL, ricevere_file_frase))
     
     print("=" * 60)
-    print("✅ BOT DI VARIAZIONI - CON PERSISTENZA")
+    print("✅ BOT DI VARIAZIONI - CASUALI CON PERSISTENZA")
     print("=" * 60)
     print(f"🤖 Bot: @TesoroA_bot")
     print(f"👑 Admin: @{ADMIN_USERNAME}")
     print("=" * 60)
     print("📌 COMANDI UTENTI:")
-    print("  • /12threads → 12 variazioni")
-    print("  • /30threads → 30 variazioni")
-    print("  • /50threads → 50 variazioni")
+    print("  • /12threads → 12 variazioni CASUALI")
+    print("  • /30threads → 30 variazioni CASUALI")
+    print("  • /50threads → 50 variazioni CASUALI")
     print("  • /stato → progresso utente")
     print("  • /reset_utente → reset progresso")
     print("  • /aiuto → guida")
     print("=" * 60)
     print(f"📁 Cartella dati: {DATA_FOLDER}")
-    print(f"📄 File frasi: {MAIN_SENTENCES_FILE}")
-    print(f"👥 File stato utenti: {USER_STATE_FILE}")
     print("=" * 60)
-    print("✅ Lo stato degli utenti è PERSISTENTE tra i riavvii")
-    print("✅ Le variazioni NON si ripetono MAI")
+    print("✅ Le variazioni sono CASUALI e NON si ripetono")
+    print("✅ Lo stato degli utenti è PERSISTENTE")
     print("=" * 60)
     
     application.run_polling()
