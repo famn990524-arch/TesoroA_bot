@@ -39,24 +39,9 @@ REELS_DB_FILE = os.path.join(DATA_FOLDER, "reels_db.json")
 
 # Modelos para THREADS
 THREADS_MODELS = {
-    "mila": {
-        "name": "🇨🇳 Mila",
-        "origin": "Chinese",
-        "origin_text": "I'm Chinese",
-        "full_name": "Mila"
-    },
-    "yuna": {
-        "name": "🇯🇵 Yuna",
-        "origin": "Japanese",
-        "origin_text": "I'm Japanese",
-        "full_name": "Yuna"
-    },
-    "ita": {
-        "name": "🇮🇹 ITA Models",
-        "origin": "Italian",
-        "origin_text": "I'm Italian",
-        "full_name": "ITA Models"
-    }
+    "mila": {"name": "🇨🇳 Mila", "origin": "Chinese", "origin_text": "I'm Chinese", "full_name": "Mila"},
+    "yuna": {"name": "🇯🇵 Yuna", "origin": "Japanese", "origin_text": "I'm Japanese", "full_name": "Yuna"},
+    "ita": {"name": "🇮🇹 ITA Models", "origin": "Italian", "origin_text": "I'm Italian", "full_name": "ITA Models"}
 }
 
 # Modelos para FOTOS
@@ -94,15 +79,15 @@ LANGUAGES = {
 
 # Constantes
 MAX_VARIATIONS = 50
-THRESHOLD_FOTOS = 40  # Avisar cuando queden 40 fotos
-THRESHOLD_REELS = 3   # Avisar cuando queden 3 reels
+THRESHOLD_FOTOS = 40
+THRESHOLD_REELS = 3
 
 # Estados
-waiting_for_file = {}  # {user_id: model_name}
-waiting_for_photo_upload = {}  # {user_id: photo_model}
-waiting_for_reel_upload = {}  # {user_id: iguser}
-pending_uploads = {}  # {user_id: {"type": "photos" or "reels", "target": xxx, "files": []}}
-waiting_for_reels_iguser = {}  # {user_id: True} - esperando que admin ponga iguser
+waiting_for_file = {}
+waiting_for_photo_upload = {}
+waiting_for_reel_upload = {}
+pending_uploads = {}
+waiting_for_reels_iguser = {}
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -115,10 +100,10 @@ user_threads_state = {}
 user_config = {}
 user_photo_config = {}
 fotos_global_state = {}
-reels_global_state = {}  # {iguser: {"total": X, "disponibili": [ids], "usate": [ids], "metadata": {}}}
+reels_global_state = {}
 
 # ======================
-# FUNZIONI CONFIGURAZIONE (threads, photos, reels - mismas que antes)
+# FUNZIONI CONFIGURAZIONE
 # ======================
 
 def caricare_config_utenti() -> Dict:
@@ -258,7 +243,7 @@ async def generare_variazione(model: str, language: str, frase_originale: str, f
 CRITICAL RULES:
 1. The girl's name is {model_info['full_name']}. ALWAYS use this name.
 2. Her origin is {model_info['origin']}. ALWAYS maintain: "{model_info['origin_text']}"
-3. ALWAYS write in FIRST PERSON (I, me, my, mine / io, me, mia / ich, mein / eu, minha / yo, mi)
+3. ALWAYS write in FIRST PERSON (I, me, my, mine)
 4. Adapt ALL cultural references to: {lang_info['context']}
 5. Keep censorship (use * or emojis as in original)
 6. Change words, not meaning. Variation number {variazione_num}
@@ -437,12 +422,10 @@ async def notificare_admin(context: ContextTypes.DEFAULT_TYPE, messaggio: str, i
 # ======================
 
 async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Muestra el menú de administrador"""
     user = update.effective_user
     if user.id != ADMIN_USER_ID:
         await update.message.reply_text("❌ Only @famn25 can use this command.")
         return
-    
     keyboard = [
         [InlineKeyboardButton("📝 Threads", callback_data="admin_threads")],
         [InlineKeyboardButton("📸 Photos", callback_data="admin_photos")],
@@ -452,7 +435,6 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👑 <b>Admin Menu</b>\n\nSelect what you want to upload:", reply_markup=reply_markup, parse_mode="HTML")
 
 async def admin_threads_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Muestra modelos para subir threads"""
     query = update.callback_query
     await query.answer()
     keyboard = [
@@ -465,7 +447,6 @@ async def admin_threads_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.edit_message_text("📝 <b>Select model to upload THREADS:</b>", reply_markup=reply_markup, parse_mode="HTML")
 
 async def admin_photos_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Muestra categorías para subir fotos"""
     query = update.callback_query
     await query.answer()
     keyboard = [
@@ -477,7 +458,6 @@ async def admin_photos_category(update: Update, context: ContextTypes.DEFAULT_TY
     await query.edit_message_text("📸 <b>Select category for PHOTOS:</b>", reply_markup=reply_markup, parse_mode="HTML")
 
 async def admin_photos_models(update: Update, context: ContextTypes.DEFAULT_TYPE, category: str):
-    """Muestra modelos para subir fotos según categoría"""
     query = update.callback_query
     await query.answer()
     keyboard = []
@@ -490,7 +470,6 @@ async def admin_photos_models(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.edit_message_text(f"📸 <b>Select model ({category_name}) to upload PHOTOS:</b>", reply_markup=reply_markup, parse_mode="HTML")
 
 async def admin_reels_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Pide el iguser para subir reels"""
     query = update.callback_query
     await query.answer()
     await query.edit_message_text(
@@ -504,21 +483,17 @@ async def admin_reels_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE)
     waiting_for_reels_iguser[ADMIN_USER_ID] = True
 
 async def admin_handle_reels_iguser(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Recibe el iguser para reels"""
     user_id = update.effective_user.id
     if user_id != ADMIN_USER_ID: return
     if not waiting_for_reels_iguser.get(user_id): return
-    
     iguser = update.message.text.strip().lower()
     if not iguser:
         await update.message.reply_text("❌ Please type a valid username.")
         return
-    
     del waiting_for_reels_iguser[user_id]
     waiting_for_reel_upload[user_id] = iguser
     if user_id not in pending_uploads:
         pending_uploads[user_id] = {"type": "reels", "target": iguser, "files": []}
-    
     await update.message.reply_text(
         f"🎬 **Uploading reels for @{iguser}**\n\n"
         "Send videos (one or more at a time).\n"
@@ -532,7 +507,6 @@ async def admin_handle_reels_iguser(update: Update, context: ContextTypes.DEFAUL
 # ======================
 
 async def user_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Muestra el menú principal para usuarios"""
     keyboard = [
         [InlineKeyboardButton("📝 Threads", callback_data="user_threads")],
         [InlineKeyboardButton("📸 Photos", callback_data="user_photos")],
@@ -542,7 +516,6 @@ async def user_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("📱 <b>Main Menu</b>\n\nWhat would you like to get?", reply_markup=reply_markup, parse_mode="HTML")
 
 async def user_threads_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menú para elegir modelo de threads"""
     query = update.callback_query
     await query.answer()
     keyboard = []
@@ -552,7 +525,6 @@ async def user_threads_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text("🌸 <b>Choose your model for THREADS:</b>", reply_markup=reply_markup, parse_mode="HTML")
 
 async def user_threads_language(update: Update, context: ContextTypes.DEFAULT_TYPE, model: str):
-    """Menú para elegir idioma de threads"""
     query = update.callback_query
     await query.answer()
     keyboard = []
@@ -563,7 +535,6 @@ async def user_threads_language(update: Update, context: ContextTypes.DEFAULT_TY
     await query.edit_message_text(f"🌸 <b>Model: {THREADS_MODELS[model]['name']}</b>\n\n🌍 <b>Choose language:</b>", reply_markup=reply_markup, parse_mode="HTML")
 
 async def user_photos_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menú para elegir categoría de fotos"""
     query = update.callback_query
     await query.answer()
     keyboard = [
@@ -575,7 +546,6 @@ async def user_photos_category(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.edit_message_text("📸 <b>Select category for PHOTOS:</b>", reply_markup=reply_markup, parse_mode="HTML")
 
 async def user_photos_models(update: Update, context: ContextTypes.DEFAULT_TYPE, category: str):
-    """Menú para elegir modelo de fotos según categoría"""
     query = update.callback_query
     await query.answer()
     keyboard = []
@@ -588,7 +558,6 @@ async def user_photos_models(update: Update, context: ContextTypes.DEFAULT_TYPE,
     await query.edit_message_text(f"📸 <b>Select model ({category_name}) for PHOTOS:</b>", reply_markup=reply_markup, parse_mode="HTML")
 
 async def user_reels_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Pide el iguser al usuario para recibir un reel"""
     query = update.callback_query
     await query.answer()
     await query.edit_message_text(
@@ -601,59 +570,39 @@ async def user_reels_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["waiting_for_reel_iguser"] = True
 
 async def user_handle_reel_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Maneja la solicitud de reel del usuario"""
     user = update.effective_user
     user_id = user.id
     username = user.username or user.first_name
-    
     if not context.user_data.get("waiting_for_reel_iguser"):
         return
-    
     iguser = update.message.text.strip().lower()
     context.user_data["waiting_for_reel_iguser"] = False
-    
     if not iguser:
         await update.message.reply_text("❌ Please type a valid username.")
         return
-    
-    # Verificar si hay reels para este iguser
     if iguser not in reels_global_state or reels_global_state[iguser]["total"] == 0:
         await update.message.reply_text(f"❌ No reels available for @{iguser}.")
         return
-    
     used, available, total = get_stato_reels_per_iguser(iguser)
-    
-    # Alertas al admin
     if available <= THRESHOLD_REELS and available > 0:
-        await notificare_admin(context, f"⚠️ <b>LOW REELS WARNING - @{iguser}!</b>\n📸 Reels available: {available}\n📌 Upload more with /admin menu.", is_admin_action=True)
-    
+        await notificare_admin(context, f"⚠️ <b>LOW REELS WARNING - @{iguser}!</b>\n📸 Reels available: {available}", is_admin_action=True)
     if available == 0:
         await update.message.reply_text(f"❌ No reels available for @{iguser}. All reels have been used!")
         return
-    
     reel_id = ottenere_reel_disponibile_per_iguser(iguser)
     if not reel_id:
         await update.message.reply_text(f"❌ No reels available for @{iguser}. Please try again later.")
         return
-    
     metadata = reels_global_state[iguser]["metadata"].get(reel_id, {})
     reel_path = metadata.get("path")
-    
     if reel_path and os.path.exists(reel_path):
         try:
-            # Enviar como video
             with open(reel_path, 'rb') as f:
                 await update.message.reply_video(video=f, caption=f"🎬 Reel from @{iguser}")
             marcare_reel_come_usato_per_iguser(iguser, reel_id)
             await notificare_admin(context, f"🎬 @{username} received a reel from @{iguser}")
-            
-            # Mostrar estado restante después del envío
             _, remaining, _ = get_stato_reels_per_iguser(iguser)
-            await update.message.reply_text(
-                f"✅ <b>Reel sent!</b>\n\n"
-                f"📨 Sent: 1 reel from @{iguser}",
-                parse_mode="HTML"
-            )
+            await update.message.reply_text(f"✅ <b>Reel sent!</b>\n\n📨 Sent: 1 reel from @{iguser}", parse_mode="HTML")
         except Exception as e:
             logger.error(f"Error sending reel for {iguser}: {e}")
             await update.message.reply_text("❌ Error sending the reel. Please try again.")
@@ -669,13 +618,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     user_id = query.from_user.id
     
-    # ========== ADMIN CALLBACKS ==========
+    # ADMIN CALLBACKS
     if data == "admin_back":
         await admin_menu(update, context)
-    
     elif data == "admin_threads":
         await admin_threads_menu(update, context)
-    
     elif data.startswith("admin_threads_"):
         model = data.replace("admin_threads_", "")
         waiting_for_file[user_id] = model
@@ -686,16 +633,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⏳ Waiting for file...",
             parse_mode="HTML"
         )
-    
     elif data == "admin_photos":
         await admin_photos_category(update, context)
-    
     elif data == "admin_photos_asian":
         await admin_photos_models(update, context, "asian")
-    
     elif data == "admin_photos_italian":
         await admin_photos_models(update, context, "italian")
-    
     elif data.startswith("admin_photos_model_"):
         photo_model = data.replace("admin_photos_model_", "")
         waiting_for_photo_upload[user_id] = photo_model
@@ -708,21 +651,17 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⏳ Photos received: 0",
             parse_mode="HTML"
         )
-    
     elif data == "admin_reels":
         await admin_reels_prompt(update, context)
     
-    # ========== USER CALLBACKS ==========
+    # USER CALLBACKS
     elif data == "user_back":
         await user_menu(update, context)
-    
     elif data == "user_threads":
         await user_threads_menu(update, context)
-    
     elif data.startswith("user_threads_model_"):
         model = data.replace("user_threads_model_", "")
         await user_threads_language(update, context, model)
-    
     elif data.startswith("user_threads_lang_"):
         parts = data.split("_")
         model = parts[3]
@@ -736,16 +675,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Example: <code>5</code>",
             parse_mode="HTML"
         )
-    
     elif data == "user_photos":
         await user_photos_category(update, context)
-    
     elif data == "user_photos_asian":
         await user_photos_models(update, context, "asian")
-    
     elif data == "user_photos_italian":
         await user_photos_models(update, context, "italian")
-    
     elif data.startswith("user_photos_model_"):
         photo_model = data.replace("user_photos_model_", "")
         set_user_photo_model(user_id, photo_model)
@@ -757,7 +692,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⚠️ Photos are ONE-TIME USE!",
             parse_mode="HTML"
         )
-    
     elif data == "user_reels":
         await user_reels_prompt(update, context)
 
@@ -766,7 +700,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ======================
 
 async def receive_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Recibe archivo .txt para threads"""
     user = update.effective_user
     user_id = user.id
     if user_id not in waiting_for_file: return
@@ -782,7 +715,6 @@ async def receive_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await file.download_to_drive(tmp.name)
             with open(tmp.name, 'r', encoding='utf-8') as f: content = f.read()
         os.unlink(tmp.name)
-        # Parsear frases numeradas
         frases = []
         lines = content.strip().split('\n')
         current = None
@@ -810,7 +742,6 @@ async def receive_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e: await status_msg.edit_text(f"❌ Error: {str(e)}")
 
 async def receive_media_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Recibe fotos o reels durante carga admin"""
     user = update.effective_user
     user_id = user.id
     if user_id not in pending_uploads: return
@@ -853,7 +784,6 @@ async def receive_media_upload(update: Update, context: ContextTypes.DEFAULT_TYP
             await update.message.reply_text(f"📦 Loaded {total} {type_name} for {target}...")
 
 async def done_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Finaliza carga de fotos o reels"""
     user = update.effective_user
     user_id = user.id
     if user_id != ADMIN_USER_ID:
@@ -961,6 +891,181 @@ async def send_photos_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(f"✅ <b>Photos sent!</b>\n\n📨 Sent: {len(sent)}", parse_mode="HTML")
 
 # ======================
+# COMANDOS ADMIN - ESTADOS DE USUARIOS
+# ======================
+
+async def all_users_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user.id != ADMIN_USER_ID:
+        await update.message.reply_text("❌ Only @famn25 can use this command.")
+        return
+    
+    stato_threads = caricare_stato_utenti_threads()
+    config_utenti = caricare_config_utenti()
+    stato_fotos = caricare_stato_fotos()
+    stato_reels = caricare_stato_reels()
+    
+    all_user_ids = set()
+    all_user_ids.update(stato_threads.keys())
+    all_user_ids.update(config_utenti.keys())
+    
+    if not all_user_ids:
+        await update.message.reply_text("📊 No users found in the database.")
+        return
+    
+    message = "📊 <b>ALL USERS STATUS</b>\n\n"
+    
+    for user_id_str in sorted(all_user_ids, key=lambda x: int(x) if x.isdigit() else 0):
+        user_id = int(user_id_str)
+        
+        threads_info = stato_threads.get(user_id_str, {})
+        threads_total = threads_info.get("total_sent", 0)
+        threads_numbers = threads_info.get("sent_numbers", [])
+        threads_remaining = MAX_VARIATIONS - (threads_total % MAX_VARIATIONS)
+        
+        user_config_data = config_utenti.get(user_id_str, {})
+        threads_model = user_config_data.get("threads_model", "mila")
+        threads_language = user_config_data.get("threads_language", "italian")
+        model_name = THREADS_MODELS.get(threads_model, {}).get("name", threads_model)
+        language_name = LANGUAGES.get(threads_language, {}).get("name", threads_language)
+        
+        username = "Unknown"
+        try:
+            chat = await context.bot.get_chat(user_id)
+            username = chat.username or chat.first_name or str(user_id)
+        except:
+            username = str(user_id)
+        
+        message += f"👤 <b>@{username}</b> (ID: {user_id})\n"
+        message += f"   📝 Threads: {threads_total} received | {threads_remaining} to cycle\n"
+        message += f"   🌸 Model: {model_name} | 🌍 Lang: {language_name}\n"
+        
+        photo_models_used = []
+        for photo_model_key, photo_data in stato_fotos.items():
+            photo_total = photo_data.get("total", 0)
+            photo_used = len(photo_data.get("usate", []))
+            photo_available = photo_total - photo_used
+            if photo_total > 0:
+                photo_models_used.append(f"{PHOTO_MODELS.get(photo_model_key, {}).get('name', photo_model_key)}: {photo_available}/{photo_total}")
+        
+        if photo_models_used:
+            message += f"   📸 Photos available: {', '.join(photo_models_used[:3])}"
+            if len(photo_models_used) > 3:
+                message += f" +{len(photo_models_used)-3} more"
+            message += "\n"
+        else:
+            message += f"   📸 Photos: No photos uploaded yet\n"
+        
+        message += "\n"
+        
+        if len(message) > 3500:
+            await update.message.reply_text(message, parse_mode="HTML")
+            message = "📊 <b>ALL USERS STATUS (continued)</b>\n\n"
+    
+    if message.strip():
+        await update.message.reply_text(message, parse_mode="HTML")
+
+async def user_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user.id != ADMIN_USER_ID:
+        await update.message.reply_text("❌ Only @famn25 can use this command.")
+        return
+    
+    if not context.args or len(context.args) == 0:
+        await update.message.reply_text(
+            "❌ Usage: <code>/userstats user_id</code>\n\n"
+            "Example: <code>/userstats 7097140504</code>\n\n"
+            "You can also use <code>/allusers</code> to see all users.",
+            parse_mode="HTML"
+        )
+        return
+    
+    target_user_id_str = context.args[0]
+    if not target_user_id_str.isdigit():
+        await update.message.reply_text("❌ User ID must be a number.")
+        return
+    
+    target_user_id = int(target_user_id_str)
+    
+    stato_threads = caricare_stato_utenti_threads()
+    config_utenti = caricare_config_utenti()
+    stato_fotos = caricare_stato_fotos()
+    stato_reels = caricare_stato_reels()
+    
+    user_id_str = str(target_user_id)
+    
+    threads_info = stato_threads.get(user_id_str, {})
+    threads_total = threads_info.get("total_sent", 0)
+    threads_numbers = threads_info.get("sent_numbers", [])
+    threads_remaining = MAX_VARIATIONS - (threads_total % MAX_VARIATIONS)
+    
+    user_config_data = config_utenti.get(user_id_str, {})
+    threads_model = user_config_data.get("threads_model", "mila")
+    threads_language = user_config_data.get("threads_language", "italian")
+    model_name = THREADS_MODELS.get(threads_model, {}).get("name", threads_model)
+    language_name = LANGUAGES.get(threads_language, {}).get("name", threads_language)
+    
+    user_photo_config_data = get_user_photo_config(target_user_id)
+    last_photo_model = user_photo_config_data.get("photo_model")
+    last_photo_model_name = PHOTO_MODELS.get(last_photo_model, {}).get("name", last_photo_model or "None")
+    
+    username = "Unknown"
+    try:
+        chat = await context.bot.get_chat(target_user_id)
+        username = chat.username or chat.first_name or str(target_user_id)
+    except:
+        username = str(target_user_id)
+    
+    message = f"📊 <b>USER STATUS - @{username}</b>\n\n"
+    message += f"🆔 User ID: {target_user_id}\n\n"
+    
+    message += f"<b>📝 THREADS:</b>\n"
+    message += f"   • Model: {model_name}\n"
+    message += f"   • Language: {language_name}\n"
+    message += f"   • Total received: {threads_total}\n"
+    message += f"   • Remaining in cycle: {threads_remaining}\n"
+    if threads_numbers:
+        message += f"   • Numbers used: {', '.join(map(str, sorted(threads_numbers)[:10]))}"
+        if len(threads_numbers) > 10:
+            message += f" +{len(threads_numbers)-10} more"
+        message += "\n"
+    
+    message += f"\n<b>📸 PHOTOS (last selection):</b>\n"
+    message += f"   • Last model selected: {last_photo_model_name}\n\n"
+    
+    message += f"<b>📊 GLOBAL STATS:</b>\n"
+    
+    total_users = len(stato_threads)
+    message += f"   • Total registered users: {total_users}\n"
+    
+    total_threads_sent = sum(u.get("total_sent", 0) for u in stato_threads.values())
+    message += f"   • Total threads sent globally: {total_threads_sent}\n"
+    
+    available_photos = []
+    for model_key, model_data in stato_fotos.items():
+        available = len([f for f in model_data.get("metadata", {}).values() if not f.get("used", False)])
+        if available > 0:
+            available_photos.append(f"{PHOTO_MODELS.get(model_key, {}).get('name', model_key)}: {available}")
+    if available_photos:
+        message += f"   • Photos available: {', '.join(available_photos[:5])}"
+        if len(available_photos) > 5:
+            message += f" +{len(available_photos)-5} more"
+        message += "\n"
+    
+    available_reels = []
+    for iguser, reel_data in stato_reels.items():
+        available = len([f for f in reel_data.get("metadata", {}).values() if not f.get("used", False)])
+        if available > 0:
+            available_reels.append(f"@{iguser}: {available}")
+    if available_reels:
+        message += f"   • Reels available: {', '.join(available_reels[:5])}"
+        if len(available_reels) > 5:
+            message += f" +{len(available_reels)-5} more"
+        message += "\n"
+    
+    await update.message.reply_text(message, parse_mode="HTML")
+
+# ======================
 # COMANDOS BASE
 # ======================
 
@@ -1019,32 +1124,41 @@ def main():
     os.makedirs(DATA_FOLDER, exist_ok=True)
     os.makedirs(PHOTOS_FOLDER, exist_ok=True)
     os.makedirs(REELS_FOLDER, exist_ok=True)
+    
     for model in THREADS_MODELS:
         if not os.path.exists(os.path.join(DATA_FOLDER, f"frases_{model}.json")):
             salvare_frasi_per_modello(model, [])
+    
     inizializzare_stato_fotos()
     inizializzare_stato_reels()
+    
     global user_config
     user_config = caricare_config_utenti()
     global user_photo_config
     user_photo_config = caricare_config_foto_utenti()
+    
     application = Application.builder().token(BOT_TOKEN).build()
-    # Admin
+    
+    # Admin commands
     application.add_handler(CommandHandler("admin", admin_menu))
+    application.add_handler(CommandHandler("allusers", all_users_status))
+    application.add_handler(CommandHandler("userstats", user_stats))
     application.add_handler(CommandHandler("done", done_command))
-    # User base
+    
+    # User base commands
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("menu", menu_command))
     application.add_handler(CommandHandler("status", status_command))
     application.add_handler(CommandHandler("reset", reset_command))
+    
     # User handlers
-    application.add_handler(MessageHandler(filters.Regex(r'^/\d+threads$'), generate_threads_for_user))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_number_message))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, user_handle_reel_request))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_handle_reels_iguser))
     application.add_handler(CallbackQueryHandler(handle_callback))
     application.add_handler(MessageHandler(filters.Document.ALL, receive_file))
     application.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.Document.ALL, receive_media_upload))
+    
     print("=" * 60)
     print("✅ BOT COMPLETO - THREADS + PHOTOS + REELS (USA E GETTA)")
     print("=" * 60)
@@ -1053,6 +1167,8 @@ def main():
     print("=" * 60)
     print("👑 ADMIN COMMANDS:")
     print("  • /admin - Open admin menu")
+    print("  • /allusers - Show all users status")
+    print("  • /userstats <id> - Show specific user status")
     print("  • /done - Finalize upload")
     print("=" * 60)
     print("📱 USER COMMANDS:")
@@ -1060,6 +1176,7 @@ def main():
     print("  • /status - Check progress")
     print("  • /reset - Reset threads")
     print("=" * 60)
+    
     application.run_polling()
 
 if __name__ == "__main__":
