@@ -217,13 +217,13 @@ async def generare_variazione(model: str, language: str, frase_originale: str, f
 
 CRITICAL RULES:
 1. The model's name is {model}. ALWAYS use this name when referring to herself.
-2. Keep Chinese origin ONLY if mentioned in original phrase
+2. Keep origin ONLY if mentioned in original phrase
 3. Adapt ALL cultural references to {language_config['context']}
 4. Keep censorship (use * or emojis as in original)
 5. Change words, not the meaning
 6. This is variation number {variazione_num}
 7. Keep teen tone (18 years old)
-8. ALWAYS speak in feminine (herself)
+8. ALWAYS speak in feminine (herself) and in first person
 9. DO NOT include the original phrase number
 10. Reply ONLY with the variation text, nothing else
 
