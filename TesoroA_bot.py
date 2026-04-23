@@ -88,6 +88,7 @@ waiting_for_photo_upload = {}
 waiting_for_reel_upload = {}
 pending_uploads = {}
 waiting_for_reels_iguser = {}
+waiting_for_reset_confirmation = {}  # {user_id: {"type": "photos" or "reels", "target": xxx}}
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -405,6 +406,10 @@ def reset_reels_per_iguser(iguser: str):
     reels_global_state[iguser] = {"total": 0, "disponibili": [], "usate": [], "metadata": {}}
     salvare_stato_reels_globale()
 
+def get_all_igusers_with_reels() -> List[str]:
+    """Retorna lista de todos los igusers que tienen reels"""
+    return list(reels_global_state.keys())
+
 # ======================
 # NOTIFICHE ADMIN
 # ======================
@@ -418,7 +423,127 @@ async def notificare_admin(context: ContextTypes.DEFAULT_TYPE, messaggio: str, i
     except Exception as e: logger.error(f"Error sending admin notification: {e}")
 
 # ======================
-# MENU ADMIN (para cargar)
+# FUNCIONES DE RESET CON CONFIRMACIÓN
+# ======================
+
+async def reset_photos_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra los modelos de fotos para resetear"""
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = []
+    # Agrupar por categoría
+    asian_models = []
+    italian_models = []
+    
+    for key, model in PHOTO_MODELS.items():
+        if model["category"] == "asian":
+            asian_models.append([InlineKeyboardButton(f"🇦🇸 {model['name']}", callback_data=f"reset_photo_{key}")])
+        else:
+            italian_models.append([InlineKeyboardButton(f"🇮🇹 {model['name']}", callback_data=f"reset_photo_{key}")])
+    
+    keyboard.extend(asian_models)
+    keyboard.extend(italian_models)
+    keyboard.append([InlineKeyboardButton("◀️ Back to Admin Menu", callback_data="admin_back")])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(
+        "🔄 <b>RESET PHOTOS</b>\n\n"
+        "Select which model's photos you want to reset.\n"
+        "⚠️ This will delete ALL photos for that model!",
+        reply_markup=reply_markup,
+        parse_mode="HTML"
+    )
+
+async def reset_reels_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra los igusers con reels para resetear"""
+    query = update.callback_query
+    await query.answer()
+    
+    igusers = get_all_igusers_with_reels()
+    
+    if not igusers:
+        await query.edit_message_text(
+            "❌ No reels found in the database.\n\n"
+            "Use /admin → Reels to upload reels first.",
+            parse_mode="HTML"
+        )
+        return
+    
+    keyboard = []
+    for iguser in igusers:
+        used, available, total = get_stato_reels_per_iguser(iguser)
+        status_icon = "🟢" if available > 0 else "🔴"
+        keyboard.append([InlineKeyboardButton(f"{status_icon} @{iguser} ({available}/{total})", callback_data=f"reset_reel_{iguser}")])
+    
+    keyboard.append([InlineKeyboardButton("◀️ Back to Admin Menu", callback_data="admin_back")])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(
+        "🔄 <b>RESET REELS</b>\n\n"
+        "Select which Instagram user's reels you want to reset.\n"
+        "⚠️ This will delete ALL reels for that user!",
+        reply_markup=reply_markup,
+        parse_mode="HTML"
+    )
+
+async def confirm_reset(update: Update, context: ContextTypes.DEFAULT_TYPE, reset_type: str, target: str):
+    """Pide confirmación antes de resetear"""
+    query = update.callback_query
+    await query.answer()
+    
+    if reset_type == "photo":
+        model_name = PHOTO_MODELS.get(target, {}).get("name", target)
+        message = f"⚠️ <b>CONFIRM RESET</b>\n\n"
+        message += f"You are about to reset ALL photos for:\n"
+        message += f"📸 <b>{model_name}</b>\n\n"
+        message += f"This action is <b>IRREVERSIBLE</b> and will delete all photos for this model.\n\n"
+        message += f"Are you sure?"
+        
+        keyboard = [
+            [InlineKeyboardButton("✅ YES, RESET", callback_data=f"confirm_reset_photo_{target}")],
+            [InlineKeyboardButton("❌ NO, CANCEL", callback_data="admin_reset")]
+        ]
+    else:
+        message = f"⚠️ <b>CONFIRM RESET</b>\n\n"
+        message += f"You are about to reset ALL reels for:\n"
+        message += f"🎬 <b>@{target}</b>\n\n"
+        message += f"This action is <b>IRREVERSIBLE</b> and will delete all reels for this user.\n\n"
+        message += f"Are you sure?"
+        
+        keyboard = [
+            [InlineKeyboardButton("✅ YES, RESET", callback_data=f"confirm_reset_reel_{target}")],
+            [InlineKeyboardButton("❌ NO, CANCEL", callback_data="admin_reset")]
+        ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(message, reply_markup=reply_markup, parse_mode="HTML")
+
+async def execute_reset(update: Update, context: ContextTypes.DEFAULT_TYPE, reset_type: str, target: str):
+    """Ejecuta el reset después de la confirmación"""
+    query = update.callback_query
+    await query.answer()
+    
+    if reset_type == "photo":
+        reset_fotos_per_modello(target)
+        model_name = PHOTO_MODELS.get(target, {}).get("name", target)
+        message = f"✅ <b>Photos reset successfully!</b>\n\n"
+        message += f"📸 Model: {model_name}\n"
+        message += f"All photos for this model have been deleted."
+    else:
+        reset_reels_per_iguser(target)
+        message = f"✅ <b>Reels reset successfully!</b>\n\n"
+        message += f"🎬 User: @{target}\n"
+        message += f"All reels for this user have been deleted."
+    
+    keyboard = [[InlineKeyboardButton("◀️ Back to Admin Menu", callback_data="admin_back")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(message, reply_markup=reply_markup, parse_mode="HTML")
+    
+    await notificare_admin(context, f"🔄 Reset completed: {reset_type} - {target}", is_admin_action=True)
+
+# ======================
+# MENU ADMIN (principal)
 # ======================
 
 async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -427,12 +552,14 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Only @famn25 can use this command.")
         return
     keyboard = [
-        [InlineKeyboardButton("📝 Threads", callback_data="admin_threads")],
-        [InlineKeyboardButton("📸 Photos", callback_data="admin_photos")],
-        [InlineKeyboardButton("🎬 Reels", callback_data="admin_reels")]
+        [InlineKeyboardButton("📝 Upload Threads", callback_data="admin_threads")],
+        [InlineKeyboardButton("📸 Upload Photos", callback_data="admin_photos")],
+        [InlineKeyboardButton("🎬 Upload Reels", callback_data="admin_reels")],
+        [InlineKeyboardButton("🔄 Reset Photos", callback_data="admin_reset_photos")],
+        [InlineKeyboardButton("🔄 Reset Reels", callback_data="admin_reset_reels")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("👑 <b>Admin Menu</b>\n\nSelect what you want to upload:", reply_markup=reply_markup, parse_mode="HTML")
+    await update.message.reply_text("👑 <b>Admin Menu</b>\n\nSelect an option:", reply_markup=reply_markup, parse_mode="HTML")
 
 async def admin_threads_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -621,8 +748,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ADMIN CALLBACKS
     if data == "admin_back":
         await admin_menu(update, context)
+    
     elif data == "admin_threads":
         await admin_threads_menu(update, context)
+    
     elif data.startswith("admin_threads_"):
         model = data.replace("admin_threads_", "")
         waiting_for_file[user_id] = model
@@ -633,12 +762,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⏳ Waiting for file...",
             parse_mode="HTML"
         )
+    
     elif data == "admin_photos":
         await admin_photos_category(update, context)
+    
     elif data == "admin_photos_asian":
         await admin_photos_models(update, context, "asian")
+    
     elif data == "admin_photos_italian":
         await admin_photos_models(update, context, "italian")
+    
     elif data.startswith("admin_photos_model_"):
         photo_model = data.replace("admin_photos_model_", "")
         waiting_for_photo_upload[user_id] = photo_model
@@ -651,17 +784,47 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⏳ Photos received: 0",
             parse_mode="HTML"
         )
+    
     elif data == "admin_reels":
         await admin_reels_prompt(update, context)
+    
+    # ADMIN RESET CALLBACKS
+    elif data == "admin_reset_photos":
+        await reset_photos_menu(update, context)
+    
+    elif data == "admin_reset_reels":
+        await reset_reels_menu(update, context)
+    
+    elif data == "admin_reset":
+        await admin_menu(update, context)
+    
+    elif data.startswith("reset_photo_"):
+        photo_model = data.replace("reset_photo_", "")
+        await confirm_reset(update, context, "photo", photo_model)
+    
+    elif data.startswith("reset_reel_"):
+        iguser = data.replace("reset_reel_", "")
+        await confirm_reset(update, context, "reel", iguser)
+    
+    elif data.startswith("confirm_reset_photo_"):
+        photo_model = data.replace("confirm_reset_photo_", "")
+        await execute_reset(update, context, "photo", photo_model)
+    
+    elif data.startswith("confirm_reset_reel_"):
+        iguser = data.replace("confirm_reset_reel_", "")
+        await execute_reset(update, context, "reel", iguser)
     
     # USER CALLBACKS
     elif data == "user_back":
         await user_menu(update, context)
+    
     elif data == "user_threads":
         await user_threads_menu(update, context)
+    
     elif data.startswith("user_threads_model_"):
         model = data.replace("user_threads_model_", "")
         await user_threads_language(update, context, model)
+    
     elif data.startswith("user_threads_lang_"):
         parts = data.split("_")
         model = parts[3]
@@ -675,12 +838,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Example: <code>5</code>",
             parse_mode="HTML"
         )
+    
     elif data == "user_photos":
         await user_photos_category(update, context)
+    
     elif data == "user_photos_asian":
         await user_photos_models(update, context, "asian")
+    
     elif data == "user_photos_italian":
         await user_photos_models(update, context, "italian")
+    
     elif data.startswith("user_photos_model_"):
         photo_model = data.replace("user_photos_model_", "")
         set_user_photo_model(user_id, photo_model)
@@ -692,6 +859,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⚠️ Photos are ONE-TIME USE!",
             parse_mode="HTML"
         )
+    
     elif data == "user_reels":
         await user_reels_prompt(update, context)
 
@@ -713,33 +881,63 @@ async def receive_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file = await context.bot.get_file(update.message.document.file_id)
         with tempfile.NamedTemporaryFile(mode='w+', suffix='.txt', encoding='utf-8', delete=False) as tmp:
             await file.download_to_drive(tmp.name)
-            with open(tmp.name, 'r', encoding='utf-8') as f: content = f.read()
+            with open(tmp.name, 'r', encoding='utf-8') as f:
+                content = f.read()
         os.unlink(tmp.name)
+        
+        # Parsear frases numeradas correctamente (multilínea)
         frases = []
         lines = content.strip().split('\n')
-        current = None
-        current_num = None
+        current_number = None
+        current_text = []
+        
         for line in lines:
-            line = line.strip()
-            if not line: continue
+            line = line.rstrip('\n\r')
+            if not line:
+                continue
+            
             match = re.match(r'^(\d{1,2})\.\s+(.*)', line)
+            
             if match:
-                if current is not None and current_num is not None:
-                    frases.append({"numero": current_num, "testo": current.strip()})
-                current_num = int(match.group(1))
-                current = match.group(2)
+                if current_number is not None and current_text:
+                    frases.append({
+                        "numero": current_number,
+                        "testo": " ".join(current_text).strip()
+                    })
+                current_number = int(match.group(1))
+                current_text = [match.group(2)]
             else:
-                if current is not None: current += "\n" + line
-        if current is not None and current_num is not None:
-            frases.append({"numero": current_num, "testo": current.strip()})
+                if current_text is not None:
+                    current_text.append(line)
+        
+        if current_number is not None and current_text:
+            frases.append({
+                "numero": current_number,
+                "testo": " ".join(current_text).strip()
+            })
+        
         if not frases:
             await status_msg.edit_text("❌ No numbered phrases found.")
             return
+        
         salvare_frasi_per_modello(model_name, frases)
         del waiting_for_file[user_id]
-        preview = "\n".join([f"📌 <b>{f['numero']}:</b> {f['testo'][:60]}..." for f in frases[:5]])
-        await status_msg.edit_text(f"✅ <b>Loaded for {THREADS_MODELS[model_name]['name']}</b>\n\n📊 Total: {len(frases)}\n\n{preview}", parse_mode="HTML")
-    except Exception as e: await status_msg.edit_text(f"❌ Error: {str(e)}")
+        
+        preview_lines = []
+        for f in frases[:5]:
+            preview_text = f['testo'][:60] + "..." if len(f['testo']) > 60 else f['testo']
+            preview_lines.append(f"📌 <b>{f['numero']}:</b> {preview_text}")
+        
+        preview = "\n".join(preview_lines)
+        await status_msg.edit_text(
+            f"✅ <b>Loaded for {THREADS_MODELS[model_name]['name']}</b>\n\n"
+            f"📊 Total phrases: {len(frases)}\n\n"
+            f"{preview}\n\n"
+            f"✅ Each phrase can now span multiple lines!",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        await status_msg.edit_text(f"❌ Error: {str(e)}")
 
 async def receive_media_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -883,11 +1081,14 @@ async def send_photos_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE
         path = fotos_global_state[photo_model]["metadata"][fid]["path"]
         if path and os.path.exists(path):
             try:
-                with open(path, 'rb') as f: await update.message.reply_photo(photo=f, caption=f"📸 Photo {i}/{len(photo_ids)}")
+                with open(path, 'rb') as f:
+                    await update.message.reply_photo(photo=f, caption=f"📸 Photo {i}/{len(photo_ids)}")
                 sent.append(fid)
                 await asyncio.sleep(0.3)
-            except Exception as e: logger.error(f"Error sending photo: {e}")
-    if sent: marcare_foto_come_usate_per_modello(photo_model, sent)
+            except Exception as e:
+                logger.error(f"Error sending photo: {e}")
+    if sent:
+        marcare_foto_come_usate_per_modello(photo_model, sent)
     await update.message.reply_text(f"✅ <b>Photos sent!</b>\n\n📨 Sent: {len(sent)}", parse_mode="HTML")
 
 # ======================
@@ -920,7 +1121,6 @@ async def all_users_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         threads_info = stato_threads.get(user_id_str, {})
         threads_total = threads_info.get("total_sent", 0)
-        threads_numbers = threads_info.get("sent_numbers", [])
         threads_remaining = MAX_VARIATIONS - (threads_total % MAX_VARIATIONS)
         
         user_config_data = config_utenti.get(user_id_str, {})
@@ -939,23 +1139,6 @@ async def all_users_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message += f"👤 <b>@{username}</b> (ID: {user_id})\n"
         message += f"   📝 Threads: {threads_total} received | {threads_remaining} to cycle\n"
         message += f"   🌸 Model: {model_name} | 🌍 Lang: {language_name}\n"
-        
-        photo_models_used = []
-        for photo_model_key, photo_data in stato_fotos.items():
-            photo_total = photo_data.get("total", 0)
-            photo_used = len(photo_data.get("usate", []))
-            photo_available = photo_total - photo_used
-            if photo_total > 0:
-                photo_models_used.append(f"{PHOTO_MODELS.get(photo_model_key, {}).get('name', photo_model_key)}: {photo_available}/{photo_total}")
-        
-        if photo_models_used:
-            message += f"   📸 Photos available: {', '.join(photo_models_used[:3])}"
-            if len(photo_models_used) > 3:
-                message += f" +{len(photo_models_used)-3} more"
-            message += "\n"
-        else:
-            message += f"   📸 Photos: No photos uploaded yet\n"
-        
         message += "\n"
         
         if len(message) > 3500:
@@ -989,8 +1172,6 @@ async def user_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     stato_threads = caricare_stato_utenti_threads()
     config_utenti = caricare_config_utenti()
-    stato_fotos = caricare_stato_fotos()
-    stato_reels = caricare_stato_reels()
     
     user_id_str = str(target_user_id)
     
@@ -1004,10 +1185,6 @@ async def user_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     threads_language = user_config_data.get("threads_language", "italian")
     model_name = THREADS_MODELS.get(threads_model, {}).get("name", threads_model)
     language_name = LANGUAGES.get(threads_language, {}).get("name", threads_language)
-    
-    user_photo_config_data = get_user_photo_config(target_user_id)
-    last_photo_model = user_photo_config_data.get("photo_model")
-    last_photo_model_name = PHOTO_MODELS.get(last_photo_model, {}).get("name", last_photo_model or "None")
     
     username = "Unknown"
     try:
@@ -1030,39 +1207,6 @@ async def user_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message += f" +{len(threads_numbers)-10} more"
         message += "\n"
     
-    message += f"\n<b>📸 PHOTOS (last selection):</b>\n"
-    message += f"   • Last model selected: {last_photo_model_name}\n\n"
-    
-    message += f"<b>📊 GLOBAL STATS:</b>\n"
-    
-    total_users = len(stato_threads)
-    message += f"   • Total registered users: {total_users}\n"
-    
-    total_threads_sent = sum(u.get("total_sent", 0) for u in stato_threads.values())
-    message += f"   • Total threads sent globally: {total_threads_sent}\n"
-    
-    available_photos = []
-    for model_key, model_data in stato_fotos.items():
-        available = len([f for f in model_data.get("metadata", {}).values() if not f.get("used", False)])
-        if available > 0:
-            available_photos.append(f"{PHOTO_MODELS.get(model_key, {}).get('name', model_key)}: {available}")
-    if available_photos:
-        message += f"   • Photos available: {', '.join(available_photos[:5])}"
-        if len(available_photos) > 5:
-            message += f" +{len(available_photos)-5} more"
-        message += "\n"
-    
-    available_reels = []
-    for iguser, reel_data in stato_reels.items():
-        available = len([f for f in reel_data.get("metadata", {}).values() if not f.get("used", False)])
-        if available > 0:
-            available_reels.append(f"@{iguser}: {available}")
-    if available_reels:
-        message += f"   • Reels available: {', '.join(available_reels[:5])}"
-        if len(available_reels) > 5:
-            message += f" +{len(available_reels)-5} more"
-        message += "\n"
-    
     await update.message.reply_text(message, parse_mode="HTML")
 
 # ======================
@@ -1073,7 +1217,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     username = user.username or user.first_name
-    if user_id != ADMIN_USER_ID: await notificare_admin(context, f"👤 New user: @{username} (ID: {user_id})")
+    if user_id != ADMIN_USER_ID:
+        await notificare_admin(context, f"👤 New user: @{username} (ID: {user_id})")
     config = get_user_config(user_id)
     threads_model_name = THREADS_MODELS[config["threads_model"]]["name"]
     language_name = LANGUAGES[config["threads_language"]]["name"]
