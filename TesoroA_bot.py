@@ -34,36 +34,72 @@ USER_STATE_FILE = os.path.join(DATA_FOLDER, "user_state.json")
 PHOTOS_FOLDER = os.path.join(DATA_FOLDER, "fotos")
 PHOTOS_DB_FILE = os.path.join(DATA_FOLDER, "fotos_db.json")
 
-# Modelos disponibles
-MODELS = ["Mila", "Yuna", "Bella", "Elira", "Aurora", "Milena", "Laura", "Isabella"]
+# Modelos disponibles (solo 3)
+MODELS = {
+    "mila": {
+        "name": "🇨🇳 Mila",
+        "origin": "Chinese",
+        "origin_text": "I'm Chinese",
+        "full_name": "Mila"
+    },
+    "yuna": {
+        "name": "🇯🇵 Yuna", 
+        "origin": "Japanese",
+        "origin_text": "I'm Japanese",
+        "full_name": "Yuna"
+    },
+    "ita": {
+        "name": "🇮🇹 ITA Models",
+        "origin": "Italian",
+        "origin_text": "I'm Italian",
+        "full_name": "ITA Models"
+    }
+}
 
 # Idiomas disponibles
 LANGUAGES = {
     "italian": {
-        "name": "🇮🇹 Italian",
-        "context": "Italian men, Italian food (pasta, pizza, gelato), Italian places (Rome, Milan, Venice), Italian culture"
+        "name": "🇮🇹 Italiano",
+        "code": "it",
+        "context": "Italian men, Italian food (pasta, pizza, gelato, tiramisu), Italian places (Rome, Milan, Venice, Florence), Italian culture, Italian traditions",
+        "first_person": "io",
+        "possessive": "mia"
     },
     "german": {
-        "name": "🇩🇪 German", 
-        "context": "German men, German food (Bratwurst, Sauerkraut, Pretzels), German places (Berlin, Munich, Hamburg), German culture"
+        "name": "🇩🇪 Deutsch",
+        "code": "de",
+        "context": "German men, German food (Bratwurst, Sauerkraut, Pretzels, Schnitzel), German places (Berlin, Munich, Hamburg, Cologne), German culture, Oktoberfest",
+        "first_person": "ich",
+        "possessive": "mein"
     },
     "portuguese": {
-        "name": "🇧🇷 Portuguese (Brazil)",
-        "context": "Brazilian men, Brazilian food (Feijoada, Pão de Queijo, Brigadeiro), Brazilian places (Rio de Janeiro, São Paulo, Salvador), Brazilian culture"
+        "name": "🇧🇷 Português (Brasil)",
+        "code": "pt",
+        "context": "Brazilian men, Brazilian food (Feijoada, Pão de Queijo, Brigadeiro, Coxinha), Brazilian places (Rio de Janeiro, São Paulo, Salvador, Brasília), Brazilian culture, Samba, Carnival",
+        "first_person": "eu",
+        "possessive": "minha"
     },
     "english": {
         "name": "🇺🇸 English (USA)",
-        "context": "American men, American food (Burgers, Pizza, BBQ), American places (New York, Los Angeles, Miami), American culture"
+        "code": "en",
+        "context": "American men, American food (Burgers, Pizza, BBQ, Apple Pie), American places (New York, Los Angeles, Chicago, Miami), American culture",
+        "first_person": "I",
+        "possessive": "my"
     },
     "spanish": {
-        "name": "🇪🇸 Spanish",
-        "context": "Spanish men, Spanish food (Paella, Tapas, Jamón), Spanish places (Madrid, Barcelona, Seville), Spanish culture"
+        "name": "🇪🇸 Español (España)",
+        "code": "es",
+        "context": "Spanish men, Spanish food (Paella, Tapas, Jamón, Tortilla), Spanish places (Madrid, Barcelona, Seville, Valencia), Spanish culture, Flamenco",
+        "first_person": "yo",
+        "possessive": "mi"
     }
 }
 
 # Estados
 waiting_for_file = {}  # {user_id: model_name}
-pending_photos = {}    # {user_id: {"iguser": "xxx", "fotos": [paths]}}
+waiting_for_photo_upload = {}  # {user_id: iguser}
+pending_photos = {}  # {user_id: [paths]}
+waiting_for_number = {}  # {user_id: True} - aspettando che l'utente scriva un numero
 
 MAX_VARIATIONS = 50
 THRESHOLD_FOTOS = 5
@@ -79,7 +115,7 @@ logger = logging.getLogger(__name__)
 # ======================
 
 user_threads_state = {}  # {user_id: {"sent_numbers": set(), "total_sent": int}}
-user_config = {}          # {user_id: {"model": "Mila", "language": "italian"}}
+user_config = {}          # {user_id: {"model": "mila", "language": "italian"}}
 fotos_global_state = {}
 
 # ======================
@@ -103,8 +139,9 @@ def get_user_config(user_id: int) -> Dict:
     user_id_str = str(user_id)
     if user_id_str not in user_config:
         user_config[user_id_str] = {
-            "model": "Mila",
-            "language": "italian"
+            "model": "mila",
+            "language": "italian",
+            "waiting_for_number": False
         }
         salvare_config_utenti(user_config)
     return user_config[user_id_str]
@@ -114,9 +151,29 @@ def set_user_config(user_id: int, model: str, language: str):
     user_id_str = str(user_id)
     user_config[user_id_str] = {
         "model": model,
-        "language": language
+        "language": language,
+        "waiting_for_number": False
     }
     salvare_config_utenti(user_config)
+
+def set_waiting_for_number(user_id: int, waiting: bool):
+    global user_config
+    user_id_str = str(user_id)
+    if user_id_str in user_config:
+        user_config[user_id_str]["waiting_for_number"] = waiting
+    else:
+        user_config[user_id_str] = {
+            "model": "mila",
+            "language": "italian",
+            "waiting_for_number": waiting
+        }
+    salvare_config_utenti(user_config)
+
+def is_waiting_for_number(user_id: int) -> bool:
+    user_id_str = str(user_id)
+    if user_id_str in user_config:
+        return user_config[user_id_str].get("waiting_for_number", False)
+    return False
 
 # ======================
 # FUNZIONI THREAD (VARIAZIONI)
@@ -209,37 +266,40 @@ def resettare_tutti_gli_utenti_threads():
     salvare_stato_utenti_threads({})
 
 async def generare_variazione(model: str, language: str, frase_originale: str, frase_numero: int, variazione_num: int) -> str:
-    """Genera una variazione adattata al modello e alla lingua"""
+    """Genera una variazione adattata al modello e alla lingua - SEMPRE in prima persona"""
     
+    model_info = MODELS[model]
     language_config = LANGUAGES[language]
     
-    system_prompt = f"""You are an Italian copywriter. Create ONE variation of the given phrase.
+    system_prompt = f"""You are a copywriter. Create ONE variation of the given phrase in {language_config['name']}.
 
 CRITICAL RULES:
-1. The model's name is {model}. ALWAYS use this name when referring to herself.
-2. Keep origin ONLY if mentioned in original phrase
-3. Adapt ALL cultural references to {language_config['context']}
-4. Keep censorship (use * or emojis as in original)
-5. Change words, not the meaning
-6. This is variation number {variazione_num}
-7. Keep teen tone (18 years old)
-8. ALWAYS speak in feminine (herself) and in first person
+1. The girl's name is {model_info['full_name']}. ALWAYS use this name when referring to herself.
+2. Her origin is {model_info['origin']}. ALWAYS maintain this: "{model_info['origin_text']}"
+3. ALWAYS write in FIRST PERSON (I, me, my, mine / io, me, mia / ich, mein, mich / eu, minha / yo, mi)
+4. Adapt ALL cultural references to: {language_config['context']}
+5. Keep censorship (use * or emojis as in original)
+6. Change words, not the meaning
+7. This is variation number {variazione_num}
+8. Keep teen tone (18 years old)
 9. DO NOT include the original phrase number
-10. Reply ONLY with the variation text, nothing else
+10. Reply ONLY with the variation text in {language_config['name']}, nothing else
 
-IMPORTANT: 
-- The character is CHINESE (if mentioned), living in the target country
-- She is attracted to {language_config['context'].split(',')[0]}
-- Use cultural references from {language_config['context']}
+CRITICAL - The character is {model_info['origin']} and speaks in FIRST PERSON:
+- "I am {model_info['origin']}..." / "Io sono {model_info['origin']}..."
+- She is attracted to men from the target country
+- Use cultural references from the target country
+- The origin ({model_info['origin']}) is FIXED and cannot change
+- Everything else adapts to the target country
 
 Original phrase (number {frase_numero}):
 {frase_originale}
 
-Generate variation number {variazione_num} in {language.upper()}:"""
+Generate variation number {variazione_num} in {language_config['name']} (FIRST PERSON):"""
 
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Generate ONE variation in {language.upper()} for {model}:"}
+        {"role": "user", "content": f"Generate ONE variation in {language_config['name']} for {model_info['full_name']} (FIRST PERSON):"}
     ]
     
     headers = {
@@ -270,7 +330,7 @@ Generate variation number {variazione_num} in {language.upper()}:"""
         return f"❌ Error: {str(e)}"
 
 # ======================
-# FUNZIONI FOTO (USA E GETTA) - IDENTICO A PRIMA
+# FUNZIONI FOTO (USA E GETTA)
 # ======================
 
 def init_fotos_db():
@@ -407,21 +467,23 @@ async def notificare_admin(context: ContextTypes.DEFAULT_TYPE, messaggio: str, i
 async def menu_modelo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Mostra il menu per selezionare la modello"""
     keyboard = []
-    row = []
-    for i, model in enumerate(MODELS):
-        row.append(InlineKeyboardButton(model, callback_data=f"model_{model}"))
-        if (i + 1) % 2 == 0:
-            keyboard.append(row)
-            row = []
-    if row:
-        keyboard.append(row)
+    for key, model in MODELS.items():
+        keyboard.append([InlineKeyboardButton(model["name"], callback_data=f"model_{key}")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        "🌸 <b>Choose your model:</b>\n\nSelect the girl you want to generate threads for:",
-        reply_markup=reply_markup,
-        parse_mode="HTML"
-    )
+    
+    if update.callback_query:
+        await update.callback_query.edit_message_text(
+            "🌸 <b>Choose your model:</b>\n\nSelect the girl for your threads:",
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
+    else:
+        await update.message.reply_text(
+            "🌸 <b>Choose your model:</b>\n\nSelect the girl for your threads:",
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
 
 async def menu_lingua(update: Update, context: ContextTypes.DEFAULT_TYPE, model: str):
     """Mostra il menu per selezionare la lingua"""
@@ -434,7 +496,7 @@ async def menu_lingua(update: Update, context: ContextTypes.DEFAULT_TYPE, model:
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(
-        f"🌸 <b>Model: {model}</b>\n\n"
+        f"🌸 <b>Model: {MODELS[model]['name']}</b>\n\n"
         f"🌍 <b>Choose language:</b>\n\n"
         f"Select the language for your threads:",
         reply_markup=reply_markup,
@@ -459,13 +521,20 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Salva la configurazione dell'utente
         set_user_config(user_id, model, language)
+        set_waiting_for_number(user_id, True)
+        
+        model_name = MODELS[model]["name"]
+        language_name = LANGUAGES[language]["name"]
         
         await query.edit_message_text(
             f"✅ <b>Configuration saved!</b>\n\n"
-            f"🌸 Model: {model}\n"
-            f"🌍 Language: {LANGUAGES[language]['name']}\n\n"
-            f"Now use <code>/threads</code> to generate threads.\n"
-            f"Example: <code>/5threads</code>",
+            f"🌸 Model: {model_name}\n"
+            f"🌍 Language: {language_name}\n\n"
+            f"📝 <b>Now just type the number of threads you want!</b>\n\n"
+            f"Example: <code>5</code> - sends 5 threads\n"
+            f"Example: <code>12</code> - sends 12 threads\n\n"
+            f"⚠️ The bot will remember your settings.\n"
+            f"Use /threads again to change model/language.",
             parse_mode="HTML"
         )
 
@@ -484,23 +553,23 @@ async def upload_frases(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args or len(context.args) == 0:
         await update.message.reply_text(
             "❌ **Usage:** <code>/upload model_name</code>\n\n"
-            f"Available models: {', '.join(MODELS)}\n\n"
-            "Example: <code>/upload Mila</code>\n\n"
+            f"Available models: mila, yuna, ita\n\n"
+            "Example: <code>/upload mila</code>\n\n"
             "Then send a .txt file with numbered phrases.",
             parse_mode="HTML"
         )
         return
     
-    model_name = context.args[0].capitalize()
+    model_name = context.args[0].lower()
     if model_name not in MODELS:
         await update.message.reply_text(
-            f"❌ Invalid model. Available: {', '.join(MODELS)}"
+            f"❌ Invalid model. Available: mila, yuna, ita"
         )
         return
     
     waiting_for_file[user.id] = model_name
     await update.message.reply_text(
-        f"📁 **Ready to receive file for {model_name}!**\n\n"
+        f"📁 **Ready to receive file for {MODELS[model_name]['name']}!**\n\n"
         "Send a .txt file with numbered phrases.\n\n"
         "📌 **Expected format:**\n"
         "<code>43. Ti amo... Non è vero bugiardo...</code>\n"
@@ -528,7 +597,7 @@ async def receive_phrases_file(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text("❌ File must be .txt")
         return
     
-    status_msg = await update.message.reply_text(f"📥 Processing file for {model_name}...")
+    status_msg = await update.message.reply_text(f"📥 Processing file for {MODELS[model_name]['name']}...")
     
     try:
         file = await context.bot.get_file(document.file_id)
@@ -593,14 +662,14 @@ async def receive_phrases_file(update: Update, context: ContextTypes.DEFAULT_TYP
             preview.append(f"📌 <b>Phrase {f['numero']}:</b> {f['testo'][:60]}...")
         
         await status_msg.edit_text(
-            f"✅ <b>Phrases for {model_name} loaded successfully!</b>\n\n"
+            f"✅ <b>Phrases for {MODELS[model_name]['name']} loaded successfully!</b>\n\n"
             f"📊 <b>Total phrases:</b> {len(frases)}\n\n"
             + "\n".join(preview) +
             (f"\n... and {len(frases) - 5} more" if len(frases) > 5 else ""),
             parse_mode="HTML"
         )
         
-        await notificare_admin(context, f"📝 You loaded {len(frases)} phrases for {model_name}", is_admin_action=True)
+        await notificare_admin(context, f"📝 You loaded {len(frases)} phrases for {MODELS[model_name]['name']}", is_admin_action=True)
         
     except Exception as e:
         await status_msg.edit_text(f"❌ Error: {str(e)}")
@@ -615,23 +684,23 @@ async def view_phrases(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args or len(context.args) == 0:
         await update.message.reply_text(
             "❌ Usage: <code>/view model_name</code>\n\n"
-            f"Available models: {', '.join(MODELS)}",
+            f"Available models: mila, yuna, ita",
             parse_mode="HTML"
         )
         return
     
-    model_name = context.args[0].capitalize()
+    model_name = context.args[0].lower()
     if model_name not in MODELS:
-        await update.message.reply_text(f"❌ Invalid model. Available: {', '.join(MODELS)}")
+        await update.message.reply_text(f"❌ Invalid model. Available: mila, yuna, ita")
         return
     
     frases = caricare_frasi_per_modello(model_name)
     
     if not frases:
-        await update.message.reply_text(f"❌ No phrases loaded for {model_name}.")
+        await update.message.reply_text(f"❌ No phrases loaded for {MODELS[model_name]['name']}.")
         return
     
-    msg = f"📊 <b>PHRASES FOR {model_name.upper()}: {len(frases)}</b>\n\n"
+    msg = f"📊 <b>PHRASES FOR {MODELS[model_name]['name'].upper()}: {len(frases)}</b>\n\n"
     for f in frases[:10]:
         msg += f"• <b>{f['numero']}:</b> {f['testo'][:80]}...\n"
     
@@ -665,13 +734,9 @@ async def upload_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     iguser = context.args[0].lower()
     
-    waiting_for_file[user_id] = "fotos"
+    waiting_for_photo_upload[user_id] = iguser
     if user_id not in pending_photos:
-        pending_photos[user_id] = {}
-    pending_photos[user_id] = {
-        "iguser": iguser,
-        "fotos": []
-    }
+        pending_photos[user_id] = []
     
     await update.message.reply_text(
         f"📸 **Uploading photos for @{iguser}**\n\n"
@@ -687,13 +752,10 @@ async def receive_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     
-    if user_id not in waiting_for_file or waiting_for_file[user_id] != "fotos":
+    if user_id not in waiting_for_photo_upload:
         return
     
-    if user_id not in pending_photos:
-        return
-    
-    iguser = pending_photos[user_id]["iguser"]
+    iguser = waiting_for_photo_upload[user_id]
     photos_added = 0
     
     if update.message.photo:
@@ -701,7 +763,7 @@ async def receive_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file = await context.bot.get_file(photo.file_id)
         temp_path = f"temp_photo_{int(time.time())}_{random.randint(1000,9999)}.jpg"
         await file.download_to_drive(temp_path)
-        pending_photos[user_id]["fotos"].append(temp_path)
+        pending_photos[user_id].append(temp_path)
         photos_added += 1
     
     if update.message.document:
@@ -711,11 +773,11 @@ async def receive_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ext = os.path.splitext(doc.file_name)[1]
             temp_path = f"temp_photo_{int(time.time())}_{random.randint(1000,9999)}{ext}"
             await file.download_to_drive(temp_path)
-            pending_photos[user_id]["fotos"].append(temp_path)
+            pending_photos[user_id].append(temp_path)
             photos_added += 1
     
     if photos_added > 0:
-        total = len(pending_photos[user_id]["fotos"])
+        total = len(pending_photos[user_id])
         
         if total % 10 == 0:
             await update.message.reply_text(
@@ -732,22 +794,23 @@ async def done_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Only @famn25 can use this command.")
         return
     
-    if user_id not in waiting_for_file or waiting_for_file[user_id] != "fotos":
+    if user_id not in waiting_for_photo_upload:
         await update.message.reply_text(
             "❌ No active upload session.\n"
             "Use /uploadphoto iguser first"
         )
         return
     
-    if user_id not in pending_photos or not pending_photos[user_id]["fotos"]:
+    if user_id not in pending_photos or not pending_photos[user_id]:
         await update.message.reply_text("❌ No pending photos to process.")
-        del waiting_for_file[user_id]
+        if user_id in waiting_for_photo_upload:
+            del waiting_for_photo_upload[user_id]
         if user_id in pending_photos:
             del pending_photos[user_id]
         return
     
-    iguser = pending_photos[user_id]["iguser"]
-    pending = pending_photos[user_id]["fotos"]
+    iguser = waiting_for_photo_upload[user_id]
+    pending = pending_photos[user_id]
     total_photos = len(pending)
     
     status_msg = await update.message.reply_text(f"📥 Processing {total_photos} photos for @{iguser}...")
@@ -762,7 +825,7 @@ async def done_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except:
                 pass
     
-    del waiting_for_file[user_id]
+    del waiting_for_photo_upload[user_id]
     del pending_photos[user_id]
     
     used, available, total = get_stato_fotos_per_iguser(iguser)
@@ -820,7 +883,7 @@ async def reset_photos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await notificare_admin(context, f"🔄 You reset the photo pool for @{iguser}", is_admin_action=True)
 
 # ======================
-# COMANDI UTENTI - THREADS
+# COMANDI UTENTI - THREADS (con solo numero)
 # ======================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -835,46 +898,63 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     config = get_user_config(user_id)
     model = config["model"]
     language = config["language"]
+    model_name = MODELS[model]["name"]
+    language_name = LANGUAGES[language]["name"]
     
     await update.message.reply_text(
         f"Hello @{username}! 👋\n\n"
-        f"📝 <b>How to use:</b>\n"
-        f"• <code>/threads</code> - Open menu to choose model and language\n"
-        f"• <code>/Nthreads</code> - Generate N threads (using your saved settings)\n"
-        f"• <code>/Nphoto iguser</code> - Receive N one-time photos\n\n"
+        f"📝 <b>How to use this bot:</b>\n\n"
+        f"1️⃣ Use <code>/threads</code> to choose a model and language\n"
+        f"2️⃣ Then simply type the number of threads you want!\n\n"
         f"📌 <b>Examples:</b>\n"
-        f"• <code>/threads</code> - Change model/language\n"
-        f"• <code>/5threads</code> → 5 threads\n"
-        f"• <code>/3photo bellamoreno</code> → 3 one-time photos\n\n"
+        f"• Type <code>5</code> → sends 5 threads\n"
+        f"• Type <code>12</code> → sends 12 threads\n\n"
+        f"📸 <b>Photos (one-time use):</b>\n"
+        f"• <code>/3photo bellamoreno</code> → receive 3 photos\n\n"
         f"📊 <b>Your current settings:</b>\n"
-        f"• Model: {model}\n"
-        f"• Language: {LANGUAGES[language]['name']}\n\n"
+        f"🌸 Model: {model_name}\n"
+        f"🌍 Language: {language_name}\n\n"
         f"💡 <b>Commands:</b>\n"
+        f"• <code>/threads</code> - Change model/language\n"
         f"• <code>/status</code> - Your progress\n"
-        f"• <code>/reset</code> - Reset progress\n"
+        f"• <code>/reset</code> - Reset thread progress\n"
         f"• <code>/help</code> - All commands",
         parse_mode="HTML"
     )
+    set_waiting_for_number(user_id, False)
 
-async def threads_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def threads_menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command /threads - Shows model selection menu"""
+    user_id = update.effective_user.id
+    set_waiting_for_number(user_id, False)
     await menu_modelo(update, context)
 
-async def generate_threads(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handles /Nthreads commands"""
+async def handle_number_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gestisce i messaggi che sono numeri (quantità di thread)"""
     user = update.effective_user
     user_id = user.id
-    username = user.username or user.first_name
-    text = update.message.text
+    text = update.message.text.strip()
     
-    match = re.match(r'^/(\d+)threads$', text.lower())
-    if not match:
+    # Verifica se l'utente è in modalità "attesa numero"
+    if not is_waiting_for_number(user_id):
         return
     
-    quantity = int(match.group(1))
+    # Verifica se è un numero
+    if not text.isdigit():
+        await update.message.reply_text(
+            "❌ Please type a number (1-50) to get threads.\n\n"
+            f"Example: <code>5</code> → sends 5 threads\n\n"
+            f"Or use /threads to change model/language.",
+            parse_mode="HTML"
+        )
+        return
+    
+    quantity = int(text)
     if quantity < 1 or quantity > MAX_VARIATIONS:
-        await update.message.reply_text(f"❌ Use /1threads to /{MAX_VARIATIONS}threads")
+        await update.message.reply_text(f"❌ Please type a number between 1 and {MAX_VARIATIONS}.")
         return
+    
+    username = user.username or user.first_name
     
     # Get user config
     config = get_user_config(user_id)
@@ -885,7 +965,7 @@ async def generate_threads(update: Update, context: ContextTypes.DEFAULT_TYPE):
     frases = caricare_frasi_per_modello(model)
     if not frases:
         await update.message.reply_text(
-            f"❌ No phrases loaded for {model}.\n"
+            f"❌ No phrases loaded for {MODELS[model]['name']}.\n"
             f"Admin @{ADMIN_USERNAME} needs to upload phrases with /upload {model}"
         )
         return
@@ -893,13 +973,13 @@ async def generate_threads(update: Update, context: ContextTypes.DEFAULT_TYPE):
     available_numbers = ottenere_numeri_disponibili_threads(user_id, quantity)
     
     if user_id != ADMIN_USER_ID:
-        await notificare_admin(context, f"🔄 @{username} requested {len(available_numbers)} threads | Model: {model} | Language: {language}")
+        await notificare_admin(context, f"🔄 @{username} requested {len(available_numbers)} threads | Model: {MODELS[model]['name']} | Language: {LANGUAGES[language]['name']}")
     else:
-        await notificare_admin(context, f"👑 You requested {len(available_numbers)} threads | Model: {model} | Language: {language}", is_admin_action=True)
+        await notificare_admin(context, f"👑 You requested {len(available_numbers)} threads | Model: {MODELS[model]['name']} | Language: {LANGUAGES[language]['name']}", is_admin_action=True)
     
-    # Send initial message with language info
+    # Send initial message
     await update.message.reply_text(
-        f"🎲 Generating {len(available_numbers)} threads for {model} in {LANGUAGES[language]['name']}...",
+        f"🎲 Generating {len(available_numbers)} threads for {MODELS[model]['name']} in {LANGUAGES[language]['name']}...",
         parse_mode="HTML"
     )
     
@@ -925,7 +1005,8 @@ async def generate_threads(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"✅ <b>Threads sent!</b>\n\n"
         f"📨 Sent this session: {len(sent)}\n"
-        f"📊 Total threads received: {total_received}",
+        f"📊 Total threads received: {total_received}\n\n"
+        f"💡 Just type another number to get more threads!",
         parse_mode="HTML"
     )
     
@@ -943,19 +1024,23 @@ async def user_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     config = get_user_config(user_id)
     model = config["model"]
     language = config["language"]
+    model_name = MODELS[model]["name"]
+    language_name = LANGUAGES[language]["name"]
     
     await update.message.reply_text(
         f"📊 <b>Your Status</b>\n\n"
         f"<b>Current settings:</b>\n"
-        f"🌸 Model: {model}\n"
-        f"🌍 Language: {LANGUAGES[language]['name']}\n\n"
+        f"🌸 Model: {model_name}\n"
+        f"🌍 Language: {language_name}\n\n"
         f"<b>Threads progress:</b>\n"
         f"• Threads received: {total}\n"
         f"• Remaining in cycle: {remaining_in_cycle}\n\n"
         f"💡 Use <code>/threads</code> to change model/language\n"
+        f"💡 Type a number (like <code>5</code>) to get threads\n"
         f"💡 Use <code>/reset</code> to reset thread progress",
         parse_mode="HTML"
     )
+    set_waiting_for_number(user_id, True)
 
 async def reset_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command /reset - Resets user's thread progress"""
@@ -967,6 +1052,7 @@ async def reset_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     salvare_stato_utente_threads(user_id)
     
     await update.message.reply_text("🔄 Your thread progress has been reset. You can start over!")
+    set_waiting_for_number(user_id, True)
     
     if user_id != ADMIN_USER_ID:
         await notificare_admin(context, f"🔄 User @{username} reset their thread progress")
@@ -1067,40 +1153,44 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     base_message = (
         f"📖 <b>Bot Help</b>\n\n"
-        f"<b>User Commands:</b>\n"
-        f"• <code>/threads</code> - Choose model and language\n"
-        f"• <code>/Nthreads</code> - Generate N random threads (ex: /5threads)\n"
-        f"• <code>/Nphoto iguser</code> - Receive N one-time photos (ex: /3photo bellamoreno)\n"
-        f"• <code>/status</code> - Your current settings and progress\n"
-        f"• <code>/reset</code> - Reset your thread progress\n"
-        f"• <code>/help</code> - Show this help\n\n"
-        f"🎲 <b>FEATURES:</b>\n"
-        f"• Threads adapt to selected model and language\n"
-        f"• Languages: Italian, German, Portuguese, English (USA), Spanish (Spain)\n"
-        f"• Photos are ONE-TIME USE, never repeat\n\n"
+        f"<b>📝 THREADS (text variations):</b>\n"
+        f"1️⃣ Use <code>/threads</code> to choose a model and language\n"
+        f"2️⃣ Then simply type the number of threads you want!\n\n"
         f"📌 <b>Examples:</b>\n"
-        f"• <code>/12threads</code>\n"
-        f"• <code>/3photo bellamoreno</code>"
+        f"• Type <code>5</code> → 5 threads\n"
+        f"• Type <code>12</code> → 12 threads\n\n"
+        f"<b>📸 PHOTOS (one-time use):</b>\n"
+        f"• <code>/3photo bellamoreno</code> → receive 3 photos\n\n"
+        f"<b>🌍 Available models:</b>\n"
+        f"• 🇨🇳 Mila (Chinese)\n"
+        f"• 🇯🇵 Yuna (Japanese)\n"
+        f"• 🇮🇹 ITA Models (Italian)\n\n"
+        f"<b>🌍 Available languages:</b>\n"
+        f"• 🇮🇹 Italian, 🇩🇪 German, 🇧🇷 Portuguese, 🇺🇸 English, 🇪🇸 Spanish\n\n"
+        f"<b>💡 Commands:</b>\n"
+        f"• <code>/threads</code> - Change model/language\n"
+        f"• <code>/status</code> - Your progress and settings\n"
+        f"• <code>/reset</code> - Reset thread progress\n"
+        f"• <code>/help</code> - This help"
     )
     
     if user_id == ADMIN_USER_ID:
         admin_message = (
             f"\n\n👑 <b>Admin Commands (@{ADMIN_USERNAME}):</b>\n"
             f"├─ <b>THREADS (per model):</b>\n"
-            f"│  • <code>/upload model_name</code> - Upload .txt file for a model\n"
-            f"│  • <code>/view model_name</code> - View loaded phrases\n"
+            f"│  • <code>/upload mila</code> - Upload .txt file for model\n"
+            f"│  • <code>/view mila</code> - View loaded phrases\n"
             f"├─ <b>ONE-TIME PHOTOS:</b>\n"
-            f"│  • <code>/uploadphoto iguser</code> - Upload photos for Instagram user\n"
-            f"│  • <code>/photostatus iguser</code> - Show photo pool status\n"
-            f"│  • <code>/resetphotos iguser</code> - Reset photo pool\n"
+            f"│  • <code>/uploadphoto iguser</code> - Upload photos\n"
+            f"│  • <code>/photostatus iguser</code> - Show status\n"
+            f"│  • <code>/resetphotos iguser</code> - Reset pool\n"
             f"└─ <b>GENERAL:</b>\n"
-            f"   • <code>/done</code> - Finalize photo upload\n\n"
-            f"📁 <b>Models available:</b> {', '.join(MODELS)}\n"
-            f"🌍 <b>Languages:</b> Italian, German, Portuguese, English, Spanish"
+            f"   • <code>/done</code> - Finalize photo upload"
         )
         await update.message.reply_text(base_message + admin_message, parse_mode="HTML")
     else:
         await update.message.reply_text(base_message, parse_mode="HTML")
+        set_waiting_for_number(user_id, True)
 
 # ======================
 # MAIN
@@ -1111,7 +1201,7 @@ def main():
     os.makedirs(PHOTOS_FOLDER, exist_ok=True)
     
     # Initialize empty phrase files for models if they don't exist
-    for model in MODELS:
+    for model in MODELS.keys():
         if not os.path.exists(os.path.join(DATA_FOLDER, f"frases_{model}.json")):
             salvare_frasi_per_modello(model, [])
     
@@ -1135,44 +1225,49 @@ def main():
     
     # User commands
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("threads", threads_menu))
+    application.add_handler(CommandHandler("threads", threads_menu_command))
     application.add_handler(CommandHandler("status", user_status))
     application.add_handler(CommandHandler("reset", reset_user))
     application.add_handler(CommandHandler("help", help_command))
     
-    # Dynamic commands
-    application.add_handler(MessageHandler(filters.Regex(r'^/\d+threads$'), generate_threads))
+    # Photo command
     application.add_handler(MessageHandler(filters.Regex(r'^/\d+photo\s+\w+$'), photo_command))
     
     # File and photo handlers
     application.add_handler(MessageHandler(filters.Document.ALL, receive_phrases_file))
     application.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, receive_photo))
     
+    # Handle number messages (for threads quantity)
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_number_message))
+    
     # Callback handler for inline menus
     application.add_handler(CallbackQueryHandler(handle_callback))
     
     print("=" * 60)
-    print("✅ BOT COMPLETO - THREADS CON MODELLI E LINGUE + FOTO USA E GETTA")
+    print("✅ BOT COMPLETO - MODELLI: MILA, YUNA, ITA MODELS")
     print("=" * 60)
     print(f"🤖 Bot: @TesoroA_bot")
     print(f"👑 Admin: @{ADMIN_USERNAME}")
     print("=" * 60)
     print("📌 ADMIN COMMANDS:")
-    print("  • /upload Mila - upload .txt file for model Mila")
-    print("  • /view Mila - view loaded phrases")
+    print("  • /upload mila - upload .txt file for Mila")
+    print("  • /upload yuna - upload .txt file for Yuna")
+    print("  • /upload ita - upload .txt file for ITA Models")
+    print("  • /view mila - view loaded phrases")
     print("  • /uploadphoto bellamoreno - upload photos")
     print("  • /photostatus bellamoreno - check status")
     print("  • /resetphotos bellamoreno - reset photos")
     print("  • /done - finalize photo upload")
     print("=" * 60)
-    print("📌 USER COMMANDS:")
-    print("  • /threads - choose model and language")
-    print("  • /5threads - generate 5 threads")
-    print("  • /3photo bellamoreno - get 3 one-time photos")
-    print("  • /status, /reset, /help")
+    print("📌 USER EXPERIENCE:")
+    print("  1. /threads → choose model (Mila/Yuna/ITA Models)")
+    print("  2. choose language")
+    print("  3. just type a number (5, 10, 12...)")
+    print("  4. bot sends that many threads!")
     print("=" * 60)
-    print(f"🌍 MODELS: {', '.join(MODELS)}")
-    print(f"🌍 LANGUAGES: Italian, German, Portuguese, English, Spanish")
+    print("🌍 MODELS: Mila (Chinese) 🇨🇳, Yuna (Japanese) 🇯🇵, ITA Models (Italian) 🇮🇹")
+    print("🌍 LANGUAGES: Italian, German, Portuguese, English, Spanish")
+    print("✅ FIRST PERSON ALWAYS")
     print("=" * 60)
     
     application.run_polling()
