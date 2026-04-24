@@ -378,7 +378,7 @@ Generate variation number {variazione_num} in {lang_info['name']}, keeping the e
         return f"❌ Error: {str(e)}"
 
 # ======================
-# FUNZIONI FOTOS (USA E GETTA)
+# FUNCIONES FOTOS (USA E GETTA)
 # ======================
 
 def init_fotos_db():
@@ -1148,19 +1148,18 @@ async def receive_media_upload(update: Update, context: ContextTypes.DEFAULT_TYP
         type_name = "photos" if upload_type == "photos" else "reels"
         target_name = target if upload_type == "reels" else PHOTO_MODELS.get(target, {}).get("name", target)
         
-        # Confirmar cada archivo (para que sepas que funciona)
+        # Confirmar cada archivo
         await update.message.reply_text(
             f"✅ Received: {total} {type_name} for {target_name}",
             parse_mode="HTML"
         )
     elif not added:
-        # No se detectó ningún archivo válido
         await update.message.reply_text(
             "❌ File not recognized.\n\n"
             "Please send:\n"
             "• Video files (.mp4, .mov)\n"
             "• Photo files (.jpg, .png)\n\n"
-            "Make sure to send them as FILES or VIDEOS, not as compressed albums.",
+            "Make sure to send them as FILES or VIDEOS.",
             parse_mode="HTML"
         )
 
@@ -1230,6 +1229,8 @@ async def done_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✅ Used: {used}",
             parse_mode="HTML"
         )
+    
+    await notificare_admin(context, f"🎬 Reels loaded: {success_count} videos for @{target}", is_admin_action=True)
 
 # ======================
 # HANDLER NUMEROS (para threads y fotos)
@@ -1515,12 +1516,22 @@ def main():
     application.add_handler(CommandHandler("status", status_command))
     application.add_handler(CommandHandler("reset", reset_command))
     
-    # User handlers
+    # User number handler
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_number_message))
+    
+    # User reel request
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, user_handle_reel_request))
+    
+    # Admin reel iguser input
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_handle_reels_iguser))
+    
+    # Callback handler
     application.add_handler(CallbackQueryHandler(handle_callback))
+    
+    # File upload handlers (threads .txt files)
     application.add_handler(MessageHandler(filters.Document.ALL, receive_file))
+    
+    # Media upload handlers (photos and reels)
     application.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.Document.ALL, receive_media_upload))
     
     print("=" * 60)
@@ -1539,6 +1550,12 @@ def main():
     print("  • /menu - Open main menu")
     print("  • /status - Check progress")
     print("  • /reset - Reset threads")
+    print("=" * 60)
+    print("🎬 REELS FLOW:")
+    print("  1. /admin → Upload Reels")
+    print("  2. Type Instagram username (ex: milae)")
+    print("  3. Send .mov or .mp4 files")
+    print("  4. /done to finish")
     print("=" * 60)
     
     application.run_polling()
