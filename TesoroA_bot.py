@@ -265,8 +265,8 @@ CRITICAL RULES:
 4. This is variation number {variazione_num}.
 5. PRESERVE the exact same format: if the original has line breaks, emojis, numbers, or lists, keep them.
 {reglas_adicionales}
-8. Keep teen tone (18 years old), FIRST PERSON.
-9. Adapt cultural references to: {lang_info['context']} (if the original mentions men, food, places, etc.)
+8. Keep teen and always femenine tone (18 years old), FIRST PERSON.
+9. Adapt cultural references to: {lang_info['context']} (if the original mentions men, food, places, etc.) but preserve the original name and country of origin if mentioned 
 10. DO NOT add any extra information that wasn't in the original phrase.
 11. Reply ONLY with the variation text in {lang_info['name']}, nothing else.
 
