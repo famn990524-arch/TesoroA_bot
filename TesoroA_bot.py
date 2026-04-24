@@ -353,7 +353,7 @@ CRITICAL RULES:
 4. This is variation number {variazione_num}.
 5. PRESERVE the exact same format: if the original has line breaks, emojis, numbers, or lists, keep them.
 {reglas_adicionales}
-8. Keep teen and always feminine tone (18 years old), FIRST PERSON.
+8. Keep teen and always feminine tone, you are a woman (18 years old), FIRST PERSON.
 9. Adapt cultural references to: {lang_info['context']} (if the original mentions men, food, places, etc.) but preserve the original name and country of origin if mentioned. For Mila the country of origin will always be China, for Yuna Japan.
 10. DO NOT add any extra information that wasn't in the original phrase.
 11. Make a double check: if the variation is in another language, check if the whole variation is translated correctly and if the cultural references (if the original mentions men, food, places, or has emojis etc.) were correctly adapted.
