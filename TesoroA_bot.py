@@ -39,9 +39,9 @@ REELS_DB_FILE = os.path.join(DATA_FOLDER, "reels_db.json")
 
 # Modelos para THREADS
 THREADS_MODELS = {
-    "mila": {"name": "🇨🇳 Mila", "origin": "Chinese", "origin_text": "I'm Chinese", "full_name": "Mila"},
-    "yuna": {"name": "🇯🇵 Yuna", "origin": "Japanese", "origin_text": "I'm Japanese", "full_name": "Yuna"},
-    "ita": {"name": "🇮🇹 ITA Models", "origin": "Italian", "origin_text": "I'm Italian", "full_name": "ITA Models"}
+    "mila": {"name": "🇨🇳 Mila", "origin": "China", "origin_text": "I'm Chinese", "full_name": "Mila"},
+    "yuna": {"name": "🇯🇵 Yuna", "origin": "Japan", "origin_text": "I'm Japanese", "full_name": "Yuna"},
+    "ita": {"name": "🇮🇹 ITA Models", "origin": "Italy", "origin_text": "I'm Italian", "full_name": "ITA Models"}
 }
 
 # Modelos para FOTOS
@@ -68,13 +68,83 @@ PHOTO_MODELS = {
     "aurora": {"name": "🇮🇹 Aurora", "category": "italian", "display": "Aurora"}
 }
 
-# Idiomas para THREADS
+# Idiomas para THREADS con marcadores
 LANGUAGES = {
-    "italian": {"name": "🇮🇹 Italiano", "code": "it", "context": "Italian men, Italian food (pasta, pizza, gelato), Italian places (Rome, Milan, Venice)"},
-    "german": {"name": "🇩🇪 Deutsch", "code": "de", "context": "German men, German food (Bratwurst, Sauerkraut, Pretzels), German places (Berlin, Munich, Hamburg)"},
-    "portuguese": {"name": "🇧🇷 Português", "code": "pt", "context": "Brazilian men, Brazilian food (Feijoada, Pão de Queijo), Brazilian places (Rio de Janeiro, São Paulo)"},
-    "english": {"name": "🇺🇸 English", "code": "en", "context": "American men, American food (Burgers, BBQ, Pizza), American places (New York, Los Angeles, Miami)"},
-    "spanish": {"name": "🇪🇸 Español", "code": "es", "context": "Spanish men, Spanish food (Paella, Tapas, Jamón), Spanish places (Madrid, Barcelona, Seville)"}
+    "italian": {
+        "name": "🇮🇹 Italiano",
+        "code": "it",
+        "context": "Italian men, Italian food (pasta, pizza, gelato), Italian places (Rome, Milan, Venice), Italian culture",
+        "replacements": {
+            "[MEN]": "uomini italiani",
+            "[MEN_SINGULAR]": "un uomo italiano",
+            "[COUNTRY]": "Italia",
+            "[COUNTRY_ADJ]": "italiana",
+            "[FLAG]": "🇮🇹",
+            "[FOOD]": "cibo italiano (pasta, pizza, gelato)",
+            "[CULTURE]": "la Dolce Vita",
+            "[LOVE_SYMBOL]": "🍝"
+        }
+    },
+    "german": {
+        "name": "🇩🇪 Deutsch",
+        "code": "de",
+        "context": "German men, German food (Bratwurst, Sauerkraut, Pretzels), German places (Berlin, Munich, Hamburg), German culture",
+        "replacements": {
+            "[MEN]": "deutsche Männer",
+            "[MEN_SINGULAR]": "ein deutscher Mann",
+            "[COUNTRY]": "Deutschland",
+            "[COUNTRY_ADJ]": "deutsche",
+            "[FLAG]": "🇩🇪",
+            "[FOOD]": "deutsches Essen (Bratwurst, Sauerkraut, Brezeln)",
+            "[CULTURE]": "das Oktoberfest",
+            "[LOVE_SYMBOL]": "🍺"
+        }
+    },
+    "portuguese": {
+        "name": "🇧🇷 Português",
+        "code": "pt",
+        "context": "Brazilian men, Brazilian food (Feijoada, Pão de Queijo), Brazilian places (Rio de Janeiro, São Paulo), Brazilian culture",
+        "replacements": {
+            "[MEN]": "homens brasileiros",
+            "[MEN_SINGULAR]": "um homem brasileiro",
+            "[COUNTRY]": "Brasil",
+            "[COUNTRY_ADJ]": "brasileira",
+            "[FLAG]": "🇧🇷",
+            "[FOOD]": "comida brasileira (feijoada, pão de queijo, brigadeiro)",
+            "[CULTURE]": "o samba e o carnaval",
+            "[LOVE_SYMBOL]": "🍹"
+        }
+    },
+    "english": {
+        "name": "🇺🇸 English",
+        "code": "en",
+        "context": "American men, American food (Burgers, Pizza, BBQ), American places (New York, Los Angeles, Miami), American culture",
+        "replacements": {
+            "[MEN]": "American men",
+            "[MEN_SINGULAR]": "an American man",
+            "[COUNTRY]": "USA",
+            "[COUNTRY_ADJ]": "American",
+            "[FLAG]": "🇺🇸",
+            "[FOOD]": "American food (burgers, BBQ, pizza)",
+            "[CULTURE]": "Hollywood",
+            "[LOVE_SYMBOL]": "💕"
+        }
+    },
+    "spanish": {
+        "name": "🇪🇸 Español",
+        "code": "es",
+        "context": "Spanish men, Spanish food (Paella, Tapas, Jamón), Spanish places (Madrid, Barcelona, Seville), Spanish culture",
+        "replacements": {
+            "[MEN]": "hombres españoles",
+            "[MEN_SINGULAR]": "un hombre español",
+            "[COUNTRY]": "España",
+            "[COUNTRY_ADJ]": "española",
+            "[FLAG]": "🇪🇸",
+            "[FOOD]": "comida española (paella, tapas, jamón)",
+            "[CULTURE]": "el flamenco",
+            "[LOVE_SYMBOL]": "💃"
+        }
+    }
 }
 
 # Constantes
@@ -88,7 +158,7 @@ waiting_for_photo_upload = {}
 waiting_for_reel_upload = {}
 pending_uploads = {}
 waiting_for_reels_iguser = {}
-waiting_for_reset_confirmation = {}  # {user_id: {"type": "photos" or "reels", "target": xxx}}
+waiting_for_reset_confirmation = {}
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -179,7 +249,22 @@ def get_photo_model_for_user(user_id: int) -> str:
     return None
 
 # ======================
-# FUNZIONI THREADS
+# FUNCIONES DE MARCADORES
+# ======================
+
+def aplicar_marcadores(texto: str, language: str) -> str:
+    """Reemplaza los marcadores [XXX] con los valores del idioma seleccionado"""
+    lang_config = LANGUAGES.get(language, LANGUAGES["english"])
+    replacements = lang_config.get("replacements", {})
+    
+    resultado = texto
+    for marker, value in replacements.items():
+        resultado = resultado.replace(marker, value)
+    
+    return resultado
+
+# ======================
+# FUNCIONES THREADS
 # ======================
 
 def caricare_frasi_per_modello(model: str) -> List[Dict]:
@@ -240,6 +325,9 @@ async def generare_variazione(model: str, language: str, frase_originale: str, f
     model_info = THREADS_MODELS[model]
     lang_info = LANGUAGES[language]
     
+    # Aplicar marcadores a la frase original
+    frase_con_marcadores = aplicar_marcadores(frase_originale, language)
+    
     # Detectar si la frase original menciona nombre u origen
     menciona_nombre = model_info['full_name'].lower() in frase_originale.lower()
     menciona_origen = model_info['origin'].lower() in frase_originale.lower() or model_info['origin_text'].lower() in frase_originale.lower()
@@ -265,18 +353,18 @@ CRITICAL RULES:
 4. This is variation number {variazione_num}.
 5. PRESERVE the exact same format: if the original has line breaks, emojis, numbers, or lists, keep them.
 {reglas_adicionales}
-8. Keep teen and always femenine tone (18 years old), FIRST PERSON.
+8. Keep teen and always feminine tone (18 years old), FIRST PERSON.
 9. Adapt cultural references to: {lang_info['context']} (if the original mentions men, food, places, etc.) but preserve the original name and country of origin if mentioned. For Mila the country of origin will always be China, for Yuna Japan.
 10. DO NOT add any extra information that wasn't in the original phrase.
-11. Make a double check, if the variation is in another lenguaje check if the whole variation is translated correctly and if the cultural references (if the original mentions men, food, places, or has emojis etc.) were correctly adapted.
+11. Make a double check: if the variation is in another language, check if the whole variation is translated correctly and if the cultural references (if the original mentions men, food, places, or has emojis etc.) were correctly adapted.
 12. Reply ONLY with the variation text in {lang_info['name']}, nothing else.
 
 Original phrase (number {frase_numero}):
-{frase_originale}
+{frase_con_marcadores}
 
 Generate variation number {variazione_num} in {lang_info['name']}, keeping the exact same format (line breaks, lists, etc.):"""
     
-    messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Generate variation {variazione_num} keeping the same format:"}]
+    messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Generate variation {variazione_num}:"}]
     headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
     payload = {"model": "deepseek-chat", "messages": messages, "temperature": 0.85, "max_tokens": 800}
     try:
@@ -430,7 +518,6 @@ def reset_reels_per_iguser(iguser: str):
     salvare_stato_reels_globale()
 
 def get_all_igusers_with_reels() -> List[str]:
-    """Retorna lista de todos los igusers que tienen reels"""
     return list(reels_global_state.keys())
 
 # ======================
@@ -443,19 +530,18 @@ async def notificare_admin(context: ContextTypes.DEFAULT_TYPE, messaggio: str, i
             await context.bot.send_message(chat_id=ADMIN_USER_ID, text=f"👑 <b>ADMIN:</b>\n{messaggio}", parse_mode="HTML")
         else:
             await context.bot.send_message(chat_id=ADMIN_USER_ID, text=messaggio, parse_mode="HTML")
-    except Exception as e: logger.error(f"Error sending admin notification: {e}")
+    except Exception as e:
+        logger.error(f"Error sending admin notification: {e}")
 
 # ======================
 # FUNCIONES DE RESET CON CONFIRMACIÓN
 # ======================
 
 async def reset_photos_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Muestra los modelos de fotos para resetear"""
     query = update.callback_query
     await query.answer()
     
     keyboard = []
-    # Agrupar por categoría
     asian_models = []
     italian_models = []
     
@@ -479,7 +565,6 @@ async def reset_photos_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def reset_reels_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Muestra los igusers con reels para resetear"""
     query = update.callback_query
     await query.answer()
     
@@ -511,7 +596,6 @@ async def reset_reels_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def confirm_reset(update: Update, context: ContextTypes.DEFAULT_TYPE, reset_type: str, target: str):
-    """Pide confirmación antes de resetear"""
     query = update.callback_query
     await query.answer()
     
@@ -543,7 +627,6 @@ async def confirm_reset(update: Update, context: ContextTypes.DEFAULT_TYPE, rese
     await query.edit_message_text(message, reply_markup=reply_markup, parse_mode="HTML")
 
 async def execute_reset(update: Update, context: ContextTypes.DEFAULT_TYPE, reset_type: str, target: str):
-    """Ejecuta el reset después de la confirmación"""
     query = update.callback_query
     await query.answer()
     
@@ -918,14 +1001,9 @@ async def receive_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         while i < len(lines):
             line = lines[i].rstrip('\n\r')
             
-            # Buscar patrón de número al inicio: "43. Texto..."
-            # Solo considerar como NUEVA frase si el número está al inicio de línea
-            # y NO es parte de una lista (ej: "1.", "2." dentro de una frase)
             match_principal = re.match(r'^(\d{1,2})\.\s+(.*)', line)
             
-            # Si encontramos un número al inicio de línea, es UNA NUEVA FRASE
             if match_principal:
-                # Guardar la frase anterior si existe
                 if current_number is not None and current_text:
                     texto_completo = "\n".join(current_text).strip()
                     frases.append({
@@ -933,17 +1011,14 @@ async def receive_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "testo": texto_completo
                     })
                 
-                # Iniciar nueva frase con este número
                 current_number = int(match_principal.group(1))
                 current_text = [match_principal.group(2)]
             else:
-                # Es continuación de la frase actual (puede tener listas internas con números)
                 if current_text is not None:
                     current_text.append(line)
             
             i += 1
         
-        # Guardar la última frase
         if current_number is not None and current_text:
             texto_completo = "\n".join(current_text).strip()
             frases.append({
@@ -958,11 +1033,9 @@ async def receive_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         salvare_frasi_per_modello(model_name, frases)
         del waiting_for_file[user_id]
         
-        # Mostrar preview
         preview_lines = []
         for f in frases[:5]:
             preview_text = f['testo'][:80] + "..." if len(f['testo']) > 80 else f['testo']
-            # Mostrar primeras líneas del preview
             preview_lines.append(f"📌 <b>{f['numero']}:</b> {preview_text}")
         
         preview = "\n".join(preview_lines)
