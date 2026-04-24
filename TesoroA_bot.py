@@ -239,22 +239,43 @@ def marcare_come_inviate_threads(user_id: int, numeri: List[int]):
 async def generare_variazione(model: str, language: str, frase_originale: str, frase_numero: int, variazione_num: int) -> str:
     model_info = THREADS_MODELS[model]
     lang_info = LANGUAGES[language]
+    
+    # Detectar si la frase original menciona nombre u origen
+    menciona_nombre = model_info['full_name'].lower() in frase_originale.lower()
+    menciona_origen = model_info['origin'].lower() in frase_originale.lower() or model_info['origin_text'].lower() in frase_originale.lower()
+    
+    # Construir reglas adicionales SOLO si es necesario
+    reglas_adicionales = ""
+    if menciona_nombre and menciona_origen:
+        reglas_adicionales = f"""
+5. The girl's name is {model_info['full_name']}. Use it ONLY when the original phrase mentions a name.
+6. Her origin is {model_info['origin']}. Use it ONLY when the original phrase mentions origin."""
+    elif menciona_nombre:
+        reglas_adicionales = f"""
+5. The girl's name is {model_info['full_name']}. Use it ONLY when the original phrase mentions a name."""
+    elif menciona_origen:
+        reglas_adicionales = f"""
+5. Her origin is {model_info['origin']}. Use it ONLY when the original phrase mentions origin."""
+    
     system_prompt = f"""You are a copywriter. Create ONE variation of the given phrase in {lang_info['name']}.
 
 CRITICAL RULES:
-1. The girl's name is {model_info['full_name']}. ALWAYS use this name.
-2. Her origin is {model_info['origin']}. ALWAYS maintain: "{model_info['origin_text']}"
-3. ALWAYS write in FIRST PERSON (I, me, my, mine)
-4. Adapt ALL cultural references to: {lang_info['context']}
-5. Keep censorship (use * or emojis as in original)
-6. Change words, not meaning. Variation number {variazione_num}
-7. Teen tone (18 years old)
-8. Reply ONLY with the variation text in {lang_info['name']}, nothing else
+1. Maintain EXACTLY the same structure and meaning as the original phrase.
+2. Keep censorship exactly as in the original (use * or emojis).
+3. Change words, change the way of expressing things, but NOT the meaning.
+4. This is variation number {variazione_num}.
+{reglas_adicionales}
+7. Keep teen tone (18 years old), FIRST PERSON.
+8. Adapt cultural references to: {lang_info['context']} (if the original mentions men, food, places, etc.)
+9. DO NOT add any extra information that wasn't in the original phrase.
+10. Reply ONLY with the variation text in {lang_info['name']}, nothing else.
 
-Original phrase: {frase_originale}
+Original phrase (number {frase_numero}):
+{frase_originale}
 
-Generate variation {variazione_num} in {lang_info['name']} (FIRST PERSON):"""
-    messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Generate variation for {model_info['full_name']}:"}]
+Generate variation number {variazione_num} in {lang_info['name']}:"""
+    
+    messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Generate variation {variazione_num}:"}]
     headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
     payload = {"model": "deepseek-chat", "messages": messages, "temperature": 0.85, "max_tokens": 800}
     try:
@@ -264,7 +285,8 @@ Generate variation {variazione_num} in {lang_info['name']} (FIRST PERSON):"""
                     result = await response.json()
                     return result['choices'][0]['message']['content'].strip()
                 return f"❌ API Error: {response.status}"
-    except Exception as e: return f"❌ Error: {str(e)}"
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
 
 # ======================
 # FUNZIONI FOTOS (USA E GETTA)
