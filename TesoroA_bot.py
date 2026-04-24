@@ -244,18 +244,17 @@ async def generare_variazione(model: str, language: str, frase_originale: str, f
     menciona_nombre = model_info['full_name'].lower() in frase_originale.lower()
     menciona_origen = model_info['origin'].lower() in frase_originale.lower() or model_info['origin_text'].lower() in frase_originale.lower()
     
-    # Construir reglas adicionales SOLO si es necesario
     reglas_adicionales = ""
     if menciona_nombre and menciona_origen:
         reglas_adicionales = f"""
-5. The girl's name is {model_info['full_name']}. Use it ONLY when the original phrase mentions a name.
-6. Her origin is {model_info['origin']}. Use it ONLY when the original phrase mentions origin."""
+6. The girl's name is {model_info['full_name']}. Use it ONLY when the original phrase mentions a name.
+7. Her origin is {model_info['origin']}. Use it ONLY when the original phrase mentions origin."""
     elif menciona_nombre:
         reglas_adicionales = f"""
-5. The girl's name is {model_info['full_name']}. Use it ONLY when the original phrase mentions a name."""
+6. The girl's name is {model_info['full_name']}. Use it ONLY when the original phrase mentions a name."""
     elif menciona_origen:
         reglas_adicionales = f"""
-5. Her origin is {model_info['origin']}. Use it ONLY when the original phrase mentions origin."""
+6. Her origin is {model_info['origin']}. Use it ONLY when the original phrase mentions origin."""
     
     system_prompt = f"""You are a copywriter. Create ONE variation of the given phrase in {lang_info['name']}.
 
@@ -264,18 +263,19 @@ CRITICAL RULES:
 2. Keep censorship exactly as in the original (use * or emojis).
 3. Change words, change the way of expressing things, but NOT the meaning.
 4. This is variation number {variazione_num}.
+5. PRESERVE the exact same format: if the original has line breaks, emojis, numbers, or lists, keep them.
 {reglas_adicionales}
-7. Keep teen tone (18 years old), FIRST PERSON.
-8. Adapt cultural references to: {lang_info['context']} (if the original mentions men, food, places, etc.)
-9. DO NOT add any extra information that wasn't in the original phrase.
-10. Reply ONLY with the variation text in {lang_info['name']}, nothing else.
+8. Keep teen tone (18 years old), FIRST PERSON.
+9. Adapt cultural references to: {lang_info['context']} (if the original mentions men, food, places, etc.)
+10. DO NOT add any extra information that wasn't in the original phrase.
+11. Reply ONLY with the variation text in {lang_info['name']}, nothing else.
 
 Original phrase (number {frase_numero}):
 {frase_originale}
 
-Generate variation number {variazione_num} in {lang_info['name']}:"""
+Generate variation number {variazione_num} in {lang_info['name']}, keeping the exact same format (line breaks, lists, etc.):"""
     
-    messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Generate variation {variazione_num}:"}]
+    messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Generate variation {variazione_num} keeping the same format:"}]
     headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
     payload = {"model": "deepseek-chat", "messages": messages, "temperature": 0.85, "max_tokens": 800}
     try:
@@ -907,35 +907,47 @@ async def receive_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 content = f.read()
         os.unlink(tmp.name)
         
-        # Parsear frases numeradas correctamente (multilínea)
+        # Parsear frases numeradas respetando listas internas
         frases = []
         lines = content.strip().split('\n')
         current_number = None
         current_text = []
         
-        for line in lines:
-            line = line.rstrip('\n\r')
-            if not line:
-                continue
+        i = 0
+        while i < len(lines):
+            line = lines[i].rstrip('\n\r')
             
-            match = re.match(r'^(\d{1,2})\.\s+(.*)', line)
+            # Buscar patrón de número al inicio: "43. Texto..."
+            # Solo considerar como NUEVA frase si el número está al inicio de línea
+            # y NO es parte de una lista (ej: "1.", "2." dentro de una frase)
+            match_principal = re.match(r'^(\d{1,2})\.\s+(.*)', line)
             
-            if match:
+            # Si encontramos un número al inicio de línea, es UNA NUEVA FRASE
+            if match_principal:
+                # Guardar la frase anterior si existe
                 if current_number is not None and current_text:
+                    texto_completo = "\n".join(current_text).strip()
                     frases.append({
                         "numero": current_number,
-                        "testo": " ".join(current_text).strip()
+                        "testo": texto_completo
                     })
-                current_number = int(match.group(1))
-                current_text = [match.group(2)]
+                
+                # Iniciar nueva frase con este número
+                current_number = int(match_principal.group(1))
+                current_text = [match_principal.group(2)]
             else:
+                # Es continuación de la frase actual (puede tener listas internas con números)
                 if current_text is not None:
                     current_text.append(line)
+            
+            i += 1
         
+        # Guardar la última frase
         if current_number is not None and current_text:
+            texto_completo = "\n".join(current_text).strip()
             frases.append({
                 "numero": current_number,
-                "testo": " ".join(current_text).strip()
+                "testo": texto_completo
             })
         
         if not frases:
@@ -945,9 +957,11 @@ async def receive_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         salvare_frasi_per_modello(model_name, frases)
         del waiting_for_file[user_id]
         
+        # Mostrar preview
         preview_lines = []
         for f in frases[:5]:
-            preview_text = f['testo'][:60] + "..." if len(f['testo']) > 60 else f['testo']
+            preview_text = f['testo'][:80] + "..." if len(f['testo']) > 80 else f['testo']
+            # Mostrar primeras líneas del preview
             preview_lines.append(f"📌 <b>{f['numero']}:</b> {preview_text}")
         
         preview = "\n".join(preview_lines)
@@ -955,7 +969,7 @@ async def receive_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✅ <b>Loaded for {THREADS_MODELS[model_name]['name']}</b>\n\n"
             f"📊 Total phrases: {len(frases)}\n\n"
             f"{preview}\n\n"
-            f"✅ Each phrase can now span multiple lines!",
+            f"✅ Format preserved (multiline phrases with internal lists are kept intact!)",
             parse_mode="HTML"
         )
     except Exception as e:
