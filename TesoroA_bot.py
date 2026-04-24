@@ -1052,23 +1052,74 @@ async def receive_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def receive_media_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
-    if user_id not in pending_uploads: return
-    upload_type = pending_uploads[user_id]["type"]
-    target = pending_uploads[user_id]["target"]
+    
+    # Verificar si hay una sesión activa de carga
+    if user_id not in pending_uploads:
+        # También verificar si hay sesión de carga de reels específica
+        if user_id not in waiting_for_reel_upload and user_id not in waiting_for_photo_upload:
+            return
+    
+    # Determinar el tipo de carga
+    upload_type = None
+    target = None
+    
+    if user_id in pending_uploads:
+        upload_type = pending_uploads[user_id]["type"]
+        target = pending_uploads[user_id]["target"]
+    elif user_id in waiting_for_reel_upload:
+        upload_type = "reels"
+        target = waiting_for_reel_upload[user_id]
+        if user_id not in pending_uploads:
+            pending_uploads[user_id] = {"type": "reels", "target": target, "files": []}
+    elif user_id in waiting_for_photo_upload:
+        upload_type = "photos"
+        target = waiting_for_photo_upload[user_id]
+        if user_id not in pending_uploads:
+            pending_uploads[user_id] = {"type": "photos", "target": target, "files": []}
+    else:
+        return
+    
     added = 0
+    
+    # Detectar VIDEO (mp4, mov, avi, mkv, etc.)
     if update.message.video:
-        file = await context.bot.get_file(update.message.video.file_id)
-        ext = ".mp4"
+        video = update.message.video
+        file = await context.bot.get_file(video.file_id)
+        # Obtener extensión del archivo
+        if video.file_name:
+            ext = os.path.splitext(video.file_name)[1]
+        else:
+            ext = ".mp4"
         temp_path = f"temp_{int(time.time())}_{random.randint(1000,9999)}{ext}"
         await file.download_to_drive(temp_path)
         pending_uploads[user_id]["files"].append(temp_path)
         added += 1
+        logger.info(f"Video received: {video.file_name if video.file_name else 'unknown'} ({video.file_size} bytes)")
+    
+    # Detectar VIDEO_NOTE (videomensaje circular)
     elif update.message.video_note:
-        file = await context.bot.get_file(update.message.video_note.file_id)
+        video_note = update.message.video_note
+        file = await context.bot.get_file(video_note.file_id)
         temp_path = f"temp_{int(time.time())}_{random.randint(1000,9999)}.mp4"
         await file.download_to_drive(temp_path)
         pending_uploads[user_id]["files"].append(temp_path)
         added += 1
+        logger.info(f"Video note received")
+    
+    # Detectar ANIMATION (GIF)
+    elif update.message.animation:
+        animation = update.message.animation
+        file = await context.bot.get_file(animation.file_id)
+        ext = ".mp4"
+        if animation.file_name:
+            ext = os.path.splitext(animation.file_name)[1]
+        temp_path = f"temp_{int(time.time())}_{random.randint(1000,9999)}{ext}"
+        await file.download_to_drive(temp_path)
+        pending_uploads[user_id]["files"].append(temp_path)
+        added += 1
+        logger.info(f"Animation/GIF received")
+    
+    # Detectar FOTO
     elif update.message.photo:
         photo = update.message.photo[-1]
         file = await context.bot.get_file(photo.file_id)
@@ -1076,51 +1127,117 @@ async def receive_media_upload(update: Update, context: ContextTypes.DEFAULT_TYP
         await file.download_to_drive(temp_path)
         pending_uploads[user_id]["files"].append(temp_path)
         added += 1
+    
+    # Detectar DOCUMENTO (puede ser video o foto)
     elif update.message.document:
         doc = update.message.document
-        if doc.mime_type and (doc.mime_type.startswith('image/') or doc.mime_type.startswith('video/')):
-            file = await context.bot.get_file(doc.file_id)
-            ext = os.path.splitext(doc.file_name)[1]
-            temp_path = f"temp_{int(time.time())}_{random.randint(1000,9999)}{ext}"
-            await file.download_to_drive(temp_path)
-            pending_uploads[user_id]["files"].append(temp_path)
-            added += 1
+        if doc.mime_type:
+            if doc.mime_type.startswith('video/'):
+                # Es un video
+                file = await context.bot.get_file(doc.file_id)
+                ext = os.path.splitext(doc.file_name)[1] if doc.file_name else ".mp4"
+                temp_path = f"temp_{int(time.time())}_{random.randint(1000,9999)}{ext}"
+                await file.download_to_drive(temp_path)
+                pending_uploads[user_id]["files"].append(temp_path)
+                added += 1
+                logger.info(f"Video document received: {doc.file_name} ({doc.mime_type})")
+            elif doc.mime_type.startswith('image/'):
+                # Es una imagen
+                file = await context.bot.get_file(doc.file_id)
+                ext = os.path.splitext(doc.file_name)[1] if doc.file_name else ".jpg"
+                temp_path = f"temp_{int(time.time())}_{random.randint(1000,9999)}{ext}"
+                await file.download_to_drive(temp_path)
+                pending_uploads[user_id]["files"].append(temp_path)
+                added += 1
+    
     if added > 0:
         total = len(pending_uploads[user_id]["files"])
-        if total % 10 == 0:
-            type_name = "photos" if upload_type == "photos" else "reels"
-            await update.message.reply_text(f"📦 Loaded {total} {type_name} for {target}...")
+        type_name = "photos" if upload_type == "photos" else "reels"
+        target_name = target if upload_type == "reels" else PHOTO_MODELS.get(target, {}).get("name", target)
+        
+        # Confirmación cada 10 archivos
+        if total % 10 == 0 or total <= 5:
+            await update.message.reply_text(
+                f"📦 Loaded {total} {type_name} for {target_name}...",
+                parse_mode="HTML"
+            )
+    else:
+        # No se detectó ningún archivo válido
+        await update.message.reply_text(
+            "❌ File not recognized.\n\n"
+            "Please send:\n"
+            "• Video files (.mp4, .mov, .avi, .mkv)\n"
+            "• Photo files (.jpg, .png)\n"
+            "• Or send them as documents",
+            parse_mode="HTML"
+        )
 
 async def done_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
+    
     if user_id != ADMIN_USER_ID:
         await update.message.reply_text("❌ Only admin can use /done")
         return
+    
     if user_id not in pending_uploads or not pending_uploads[user_id]["files"]:
-        await update.message.reply_text("❌ No files to process.")
+        await update.message.reply_text(
+            "❌ No files to process.\n\n"
+            "Make sure you:\n"
+            "1. Started upload with /admin → Reels (or Photos)\n"
+            "2. Sent video/photo files\n"
+            "3. Files were recognized (check for confirmation messages)"
+        )
         return
+    
     upload_type = pending_uploads[user_id]["type"]
     target = pending_uploads[user_id]["target"]
     files = pending_uploads[user_id]["files"]
     total_files = len(files)
+    
     status_msg = await update.message.reply_text(f"📥 Processing {total_files} files...")
+    
+    success_count = 0
     for path in files:
-        if upload_type == "photos":
-            aggiungere_foto_per_modello(target, path)
-        else:
-            aggiungere_reel_per_iguser(target, path)
+        try:
+            if upload_type == "photos":
+                aggiungere_foto_per_modello(target, path)
+            else:
+                aggiungere_reel_per_iguser(target, path)
+            success_count += 1
+        except Exception as e:
+            logger.error(f"Error processing file {path}: {e}")
+    
+    # Limpiar archivos temporales
     for path in files:
         if os.path.exists(path):
-            try: os.unlink(path)
-            except: pass
+            try:
+                os.unlink(path)
+            except:
+                pass
+    
     del pending_uploads[user_id]
+    
     if upload_type == "photos":
         used, available, total = get_stato_fotos_per_modello(target)
-        await status_msg.edit_text(f"✅ <b>Photos for {PHOTO_MODELS[target]['name']} loaded!</b>\n\n📸 Added: {total_files}\n📊 Total: {total}\n⏳ Available: {available}", parse_mode="HTML")
+        await status_msg.edit_text(
+            f"✅ <b>Photos for {PHOTO_MODELS[target]['name']} loaded!</b>\n\n"
+            f"📸 Added: {success_count}/{total_files}\n"
+            f"📊 Total in pool: {total}\n"
+            f"⏳ Available: {available}\n"
+            f"✅ Used: {used}",
+            parse_mode="HTML"
+        )
     else:
         used, available, total = get_stato_reels_per_iguser(target)
-        await status_msg.edit_text(f"✅ <b>Reels for @{target} loaded!</b>\n\n🎬 Added: {total_files}\n📊 Total: {total}\n⏳ Available: {available}", parse_mode="HTML")
+        await status_msg.edit_text(
+            f"✅ <b>Reels for @{target} loaded!</b>\n\n"
+            f"🎬 Added: {success_count}/{total_files}\n"
+            f"📊 Total in pool: {total}\n"
+            f"⏳ Available: {available}\n"
+            f"✅ Used: {used}",
+            parse_mode="HTML"
+        )
 
 # ======================
 # HANDLER NUMEROS (para threads y fotos)
