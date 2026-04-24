@@ -268,7 +268,8 @@ CRITICAL RULES:
 8. Keep teen and always femenine tone (18 years old), FIRST PERSON.
 9. Adapt cultural references to: {lang_info['context']} (if the original mentions men, food, places, etc.) but preserve the original name and country of origin if mentioned. For Mila the country of origin will always be China, for Yuna Japan.
 10. DO NOT add any extra information that wasn't in the original phrase.
-11. Reply ONLY with the variation text in {lang_info['name']}, nothing else.
+11. Make a double check, if the variation is in another lenguaje check if the whole variation is translated correctly and if the cultural references (if the original mentions men, food, places, or has emojis etc.) were correctly adapted.
+12. Reply ONLY with the variation text in {lang_info['name']}, nothing else.
 
 Original phrase (number {frase_numero}):
 {frase_originale}
