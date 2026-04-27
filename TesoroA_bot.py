@@ -36,12 +36,15 @@ PHOTOS_FOLDER = os.path.join(DATA_FOLDER, "fotos")
 PHOTOS_DB_FILE = os.path.join(DATA_FOLDER, "fotos_db.json")
 REELS_FOLDER = os.path.join(DATA_FOLDER, "reels")
 REELS_DB_FILE = os.path.join(DATA_FOLDER, "reels_db.json")
+COMMENTS_FOLDER = os.path.join(DATA_FOLDER, "comments")
+COMMENTS_DB_FILE = os.path.join(DATA_FOLDER, "comments_db.json")
 
-# Modelos para THREADS
+# Modelos para THREADS (ahora con Comments)
 THREADS_MODELS = {
     "mila": {"name": "🇨🇳 Mila", "origin": "China", "origin_text": "I'm Chinese", "full_name": "Mila"},
     "yuna": {"name": "🇯🇵 Yuna", "origin": "Japan", "origin_text": "I'm Japanese", "full_name": "Yuna"},
-    "ita": {"name": "🇮🇹 ITA Models", "origin": "Italy", "origin_text": "I'm Italian", "full_name": "ITA Models"}
+    "ita": {"name": "🇮🇹 ITA Models", "origin": "Italy", "origin_text": "I'm Italian", "full_name": "ITA Models"},
+    "comments": {"name": "💬 Comments", "origin": "None", "origin_text": "", "full_name": "Comment"}
 }
 
 # Modelos para FOTOS
@@ -151,6 +154,7 @@ LANGUAGES = {
 MAX_VARIATIONS = 50
 THRESHOLD_FOTOS = 40
 THRESHOLD_REELS = 3
+PHOTO_CONFIRMATION_BATCH = 50  # Confirmar cada 50 fotos
 
 # Estados
 waiting_for_file = {}
@@ -172,6 +176,7 @@ user_config = {}
 user_photo_config = {}
 fotos_global_state = {}
 reels_global_state = {}
+comments_global_state = {}
 
 # ======================
 # FUNZIONI CONFIGURAZIONE
@@ -328,23 +333,43 @@ async def generare_variazione(model: str, language: str, frase_originale: str, f
     # Aplicar marcadores a la frase original
     frase_con_marcadores = aplicar_marcadores(frase_originale, language)
     
-    # Detectar si la frase original menciona nombre u origen
-    menciona_nombre = model_info['full_name'].lower() in frase_originale.lower()
-    menciona_origen = model_info['origin'].lower() in frase_originale.lower() or model_info['origin_text'].lower() in frase_originale.lower()
-    
-    reglas_adicionales = ""
-    if menciona_nombre and menciona_origen:
-        reglas_adicionales = f"""
+    # Para Comments, no hay origen, solo generar variaciones
+    if model == "comments":
+        system_prompt = f"""You are a copywriter. Create ONE variation of the given phrase in {lang_info['name']}.
+
+CRITICAL RULES:
+1. Maintain EXACTLY the same structure and meaning as the original phrase.
+2. Keep censorship exactly as in the original (use * or emojis).
+3. Change words, change the way of expressing things, but NOT the meaning.
+4. This is variation number {variazione_num}.
+5. PRESERVE the exact same format: if the original has line breaks, emojis, numbers, or lists, keep them.
+6. Keep teen and always feminine tone, FIRST PERSON.
+7. Adapt cultural references to: {lang_info['context']} (if the original mentions men, food, places, etc.)
+8. DO NOT add any extra information that wasn't in the original phrase.
+9. Reply ONLY with the variation text in {lang_info['name']}, nothing else.
+
+Original phrase (number {frase_numero}):
+{frase_con_marcadores}
+
+Generate variation number {variazione_num} in {lang_info['name']}, keeping the exact same format:"""
+    else:
+        # Detectar si la frase original menciona nombre u origen
+        menciona_nombre = model_info['full_name'].lower() in frase_originale.lower()
+        menciona_origen = model_info['origin'].lower() in frase_originale.lower() or model_info['origin_text'].lower() in frase_originale.lower()
+        
+        reglas_adicionales = ""
+        if menciona_nombre and menciona_origen:
+            reglas_adicionales = f"""
 6. The girl's name is {model_info['full_name']}. Use it ONLY when the original phrase mentions a name.
 7. Her origin is {model_info['origin']}. Use it ONLY when the original phrase mentions origin."""
-    elif menciona_nombre:
-        reglas_adicionales = f"""
+        elif menciona_nombre:
+            reglas_adicionales = f"""
 6. The girl's name is {model_info['full_name']}. Use it ONLY when the original phrase mentions a name."""
-    elif menciona_origen:
-        reglas_adicionales = f"""
+        elif menciona_origen:
+            reglas_adicionales = f"""
 6. Her origin is {model_info['origin']}. Use it ONLY when the original phrase mentions origin."""
-    
-    system_prompt = f"""You are a copywriter. Create ONE variation of the given phrase in {lang_info['name']}.
+        
+        system_prompt = f"""You are a copywriter. Create ONE variation of the given phrase in {lang_info['name']}.
 
 CRITICAL RULES:
 1. Maintain EXACTLY the same structure and meaning as the original phrase.
@@ -378,7 +403,7 @@ Generate variation number {variazione_num} in {lang_info['name']}, keeping the e
         return f"❌ Error: {str(e)}"
 
 # ======================
-# FUNCIONES FOTOS (USA E GETTA)
+# FUNZIONES FOTOS (USA E GETTA)
 # ======================
 
 def init_fotos_db():
@@ -674,6 +699,7 @@ async def admin_threads_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton(THREADS_MODELS["mila"]["name"], callback_data="admin_threads_mila")],
         [InlineKeyboardButton(THREADS_MODELS["yuna"]["name"], callback_data="admin_threads_yuna")],
         [InlineKeyboardButton(THREADS_MODELS["ita"]["name"], callback_data="admin_threads_ita")],
+        [InlineKeyboardButton(THREADS_MODELS["comments"]["name"], callback_data="admin_threads_comments")],
         [InlineKeyboardButton("◀️ Back", callback_data="admin_back")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1148,11 +1174,19 @@ async def receive_media_upload(update: Update, context: ContextTypes.DEFAULT_TYP
         type_name = "photos" if upload_type == "photos" else "reels"
         target_name = target if upload_type == "reels" else PHOTO_MODELS.get(target, {}).get("name", target)
         
-        # Confirmar cada archivo
-        await update.message.reply_text(
-            f"✅ Received: {total} {type_name} for {target_name}",
-            parse_mode="HTML"
-        )
+        # Confirmar CADA 50 fotos (PHOTO_CONFIRMATION_BATCH)
+        if upload_type == "photos":
+            if total % PHOTO_CONFIRMATION_BATCH == 0:
+                await update.message.reply_text(
+                    f"📦 Loaded {total} photos for {target_name}",
+                    parse_mode="HTML"
+                )
+        else:
+            # Para reels, confirmar cada uno (pocos)
+            await update.message.reply_text(
+                f"✅ Received: {total} {type_name} for {target_name}",
+                parse_mode="HTML"
+            )
     elif not added:
         await update.message.reply_text(
             "❌ File not recognized.\n\n"
@@ -1490,6 +1524,7 @@ def main():
     os.makedirs(PHOTOS_FOLDER, exist_ok=True)
     os.makedirs(REELS_FOLDER, exist_ok=True)
     
+    # Inicializar archivos de frases para todos los modelos (incluyendo Comments)
     for model in THREADS_MODELS:
         if not os.path.exists(os.path.join(DATA_FOLDER, f"frases_{model}.json")):
             salvare_frasi_per_modello(model, [])
@@ -1540,6 +1575,12 @@ def main():
     print(f"🤖 Bot: @TesoroA_bot")
     print(f"👑 Admin: @{ADMIN_USERNAME}")
     print("=" * 60)
+    print("📌 THREADS MODELS:")
+    print("  • 🇨🇳 Mila")
+    print("  • 🇯🇵 Yuna")
+    print("  • 🇮🇹 ITA Models")
+    print("  • 💬 Comments")
+    print("=" * 60)
     print("👑 ADMIN COMMANDS:")
     print("  • /admin - Open admin menu")
     print("  • /allusers - Show all users status")
@@ -1551,11 +1592,8 @@ def main():
     print("  • /status - Check progress")
     print("  • /reset - Reset threads")
     print("=" * 60)
-    print("🎬 REELS FLOW:")
-    print("  1. /admin → Upload Reels")
-    print("  2. Type Instagram username (ex: milae)")
-    print("  3. Send .mov or .mp4 files")
-    print("  4. /done to finish")
+    print("📸 PHOTO CONFIRMATION:")
+    print(f"  • Confirmation every {PHOTO_CONFIRMATION_BATCH} photos")
     print("=" * 60)
     
     application.run_polling()
