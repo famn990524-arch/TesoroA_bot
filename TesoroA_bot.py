@@ -17,7 +17,9 @@ import time
 # CONFIGURAZIONE
 # ======================
 
-BOT_TOKEN = "8216455195:AAEROEWGkL1MgPdLyqCdm3sSdDj9MSM53d4"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("❌ No se encontró la variable de entorno BOT_TOKEN. Configúrala en Railway.")
 DEEPSEEK_API_KEY = "sk-7e2b6eb1c4ff4b4aa1046a6ae500a40e"
 ADMIN_USER_ID = 7097140504  # @famn25
 ADMIN_USERNAME = "famn25"
