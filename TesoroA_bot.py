@@ -36,44 +36,98 @@ USER_STATE_FILE = os.path.join(DATA_FOLDER, "user_state.json")
 USER_PHOTO_CONFIG_FILE = os.path.join(DATA_FOLDER, "user_photo_config.json")
 PHOTOS_FOLDER = os.path.join(DATA_FOLDER, "fotos")
 PHOTOS_DB_FILE = os.path.join(DATA_FOLDER, "fotos_db.json")
+PHOTO_CATEGORIES_FILE = os.path.join(DATA_FOLDER, "photo_categories.json")
 REELS_FOLDER = os.path.join(DATA_FOLDER, "reels")
 REELS_DB_FILE = os.path.join(DATA_FOLDER, "reels_db.json")
-COMMENTS_FOLDER = os.path.join(DATA_FOLDER, "comments")
-COMMENTS_DB_FILE = os.path.join(DATA_FOLDER, "comments_db.json")
 
-# Modelos para THREADS (ahora con Comments)
-THREADS_MODELS = {
-    "mila": {"name": "🇨🇳 Mila", "origin": "China", "origin_text": "I'm Chinese", "full_name": "Mila"},
-    "yuna": {"name": "🇯🇵 Yuna", "origin": "Japan", "origin_text": "I'm Japanese", "full_name": "Yuna"},
-    "ita": {"name": "🇮🇹 ITA Models", "origin": "Italy", "origin_text": "I'm Italian", "full_name": "ITA Models"},
-    "comments": {"name": "💬 Comments", "origin": "None", "origin_text": "", "full_name": "Comment"}
-}
+# Modelos para THREADS (dinámicos)
+THREADS_MODELS_FILE = os.path.join(DATA_FOLDER, "threads_models.json")
 
-# Modelos para FOTOS
-PHOTO_MODELS = {
-    "mila_photo": {"name": "🇨🇳 Mila", "category": "asian", "display": "Mila"},
-    "yuna_photo": {"name": "🇯🇵 Yuna", "category": "asian", "display": "Yuna"},
-    "model1": {"name": "🇨🇳 Model 1", "category": "asian", "display": "Model 1"},
-    "model2": {"name": "🇨🇳 Model 2", "category": "asian", "display": "Model 2"},
-    "model3": {"name": "🇨🇳 Model 3", "category": "asian", "display": "Model 3"},
-    "model4": {"name": "🇨🇳 Model 4", "category": "asian", "display": "Model 4"},
-    "model5": {"name": "🇨🇳 Model 5", "category": "asian", "display": "Model 5"},
-    "model6": {"name": "🇨🇳 Model 6", "category": "asian", "display": "Model 6"},
-    "model7": {"name": "🇨🇳 Model 7", "category": "asian", "display": "Model 7"},
-    "model8": {"name": "🇨🇳 Model 8", "category": "asian", "display": "Model 8"},
-    "model9": {"name": "🇨🇳 Model 9", "category": "asian", "display": "Model 9"},
-    "model10": {"name": "🇨🇳 Model 10", "category": "asian", "display": "Model 10"},
-    "model11": {"name": "🇨🇳 Model 11", "category": "asian", "display": "Model 11"},
-    "model12": {"name": "🇨🇳 Model 12", "category": "asian", "display": "Model 12"},
-    "elira": {"name": "🇮🇹 Elira", "category": "italian", "display": "Elira"},
-    "bella": {"name": "🇮🇹 Bella", "category": "italian", "display": "Bella"},
-    "milena": {"name": "🇮🇹 Milena", "category": "italian", "display": "Milena"},
-    "isabella": {"name": "🇮🇹 Isabella", "category": "italian", "display": "Isabella"},
-    "laura": {"name": "🇮🇹 Laura", "category": "italian", "display": "Laura"},
-    "aurora": {"name": "🇮🇹 Aurora", "category": "italian", "display": "Aurora"}
-}
+# Cargar o inicializar modelos de threads
+def load_threads_models() -> Dict:
+    os.makedirs(DATA_FOLDER, exist_ok=True)
+    if os.path.exists(THREADS_MODELS_FILE):
+        with open(THREADS_MODELS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    else:
+        # Modelos iniciales
+        default_models = {
+            "mila": {"name": "🇨🇳 Mila", "origin": "China", "origin_text": "I'm Chinese", "full_name": "Mila"},
+            "yuna": {"name": "🇯🇵 Yuna", "origin": "Japan", "origin_text": "I'm Japanese", "full_name": "Yuna"},
+            "ita": {"name": "🇮🇹 ITA Models", "origin": "Italy", "origin_text": "I'm Italian", "full_name": "ITA Models"},
+            "comments": {"name": "💬 Comments", "origin": "None", "origin_text": "", "full_name": "Comment"}
+        }
+        save_threads_models(default_models)
+        return default_models
 
-# Idiomas para THREADS con marcadores
+def save_threads_models(models: Dict):
+    with open(THREADS_MODELS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(models, f, ensure_ascii=False, indent=2)
+
+THREADS_MODELS = load_threads_models()
+
+# Cargar o inicializar categorías de fotos
+def load_photo_categories() -> Dict:
+    os.makedirs(DATA_FOLDER, exist_ok=True)
+    if os.path.exists(PHOTO_CATEGORIES_FILE):
+        with open(PHOTO_CATEGORIES_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    else:
+        # Categorías iniciales
+        default_categories = {
+            "asian": {
+                "name": "🇦🇸 Asian",
+                "models": {
+                    "mila_photo": {"name": "🇨🇳 Mila", "display": "Mila"},
+                    "yuna_photo": {"name": "🇯🇵 Yuna", "display": "Yuna"},
+                    "model1": {"name": "🇨🇳 Model 1", "display": "Model 1"},
+                    "model2": {"name": "🇨🇳 Model 2", "display": "Model 2"},
+                    "model3": {"name": "🇨🇳 Model 3", "display": "Model 3"},
+                    "model4": {"name": "🇨🇳 Model 4", "display": "Model 4"},
+                    "model5": {"name": "🇨🇳 Model 5", "display": "Model 5"},
+                    "model6": {"name": "🇨🇳 Model 6", "display": "Model 6"},
+                    "model7": {"name": "🇨🇳 Model 7", "display": "Model 7"},
+                    "model8": {"name": "🇨🇳 Model 8", "display": "Model 8"},
+                    "model9": {"name": "🇨🇳 Model 9", "display": "Model 9"},
+                    "model10": {"name": "🇨🇳 Model 10", "display": "Model 10"},
+                    "model11": {"name": "🇨🇳 Model 11", "display": "Model 11"},
+                    "model12": {"name": "🇨🇳 Model 12", "display": "Model 12"}
+                }
+            },
+            "italian": {
+                "name": "🇮🇹 Italian",
+                "models": {
+                    "elira": {"name": "🇮🇹 Elira", "display": "Elira"},
+                    "bella": {"name": "🇮🇹 Bella", "display": "Bella"},
+                    "milena": {"name": "🇮🇹 Milena", "display": "Milena"},
+                    "isabella": {"name": "🇮🇹 Isabella", "display": "Isabella"},
+                    "laura": {"name": "🇮🇹 Laura", "display": "Laura"},
+                    "aurora": {"name": "🇮🇹 Aurora", "display": "Aurora"}
+                }
+            }
+        }
+        save_photo_categories(default_categories)
+        return default_categories
+
+def save_photo_categories(categories: Dict):
+    with open(PHOTO_CATEGORIES_FILE, 'w', encoding='utf-8') as f:
+        json.dump(categories, f, ensure_ascii=False, indent=2)
+
+PHOTO_CATEGORIES = load_photo_categories()
+
+# Función para obtener todos los modelos de fotos (para compatibilidad)
+def get_all_photo_models() -> Dict:
+    all_models = {}
+    for cat_key, cat_data in PHOTO_CATEGORIES.items():
+        for model_key, model_data in cat_data["models"].items():
+            all_models[model_key] = {
+                "name": model_data["name"],
+                "category": cat_key,
+                "display": model_data["display"]
+            }
+    return all_models
+
+# Idiomas para THREADS con marcadores (actualizado con francés)
 LANGUAGES = {
     "italian": {
         "name": "🇮🇹 Italiano",
@@ -149,6 +203,21 @@ LANGUAGES = {
             "[CULTURE]": "el flamenco",
             "[LOVE_SYMBOL]": "💃"
         }
+    },
+    "french": {
+        "name": "🇫🇷 Français",
+        "code": "fr",
+        "context": "French men, French food (croissant, baguette, escargot, cheese, wine), French places (Paris, Lyon, Marseille, Bordeaux), French culture",
+        "replacements": {
+            "[MEN]": "hommes français",
+            "[MEN_SINGULAR]": "un homme français",
+            "[COUNTRY]": "France",
+            "[COUNTRY_ADJ]": "française",
+            "[FLAG]": "🇫🇷",
+            "[FOOD]": "cuisine française (croissant, baguette, fromage, escargot)",
+            "[CULTURE]": "la belle vie, l'élégance à la française",
+            "[LOVE_SYMBOL]": "🥖"
+        }
     }
 }
 
@@ -156,15 +225,20 @@ LANGUAGES = {
 MAX_VARIATIONS = 50
 THRESHOLD_FOTOS = 40
 THRESHOLD_REELS = 3
-PHOTO_CONFIRMATION_BATCH = 50  # Confirmar cada 50 fotos
+PHOTO_CONFIRMATION_BATCH = 50
 
-# Estados
+# Estados para admin (nuevos para gestión dinámica)
 waiting_for_file = {}
 waiting_for_photo_upload = {}
 waiting_for_reel_upload = {}
 pending_uploads = {}
 waiting_for_reels_iguser = {}
 waiting_for_reset_confirmation = {}
+
+# Estados para creación dinámica
+waiting_for_new_threads_model = {}  # {user_id: {"step": "name" or "origin" or "origin_text" or "full_name"}}
+waiting_for_new_photo_category = {}  # {user_id: {"step": "category_name", "category_key": str}}
+waiting_for_new_photo_model = {}  # {user_id: {"step": "model_name", "category_key": str, "model_key": str}}
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -178,7 +252,6 @@ user_config = {}
 user_photo_config = {}
 fotos_global_state = {}
 reels_global_state = {}
-comments_global_state = {}
 
 # ======================
 # FUNZIONI CONFIGURAZIONE
@@ -260,14 +333,11 @@ def get_photo_model_for_user(user_id: int) -> str:
 # ======================
 
 def aplicar_marcadores(texto: str, language: str) -> str:
-    """Reemplaza los marcadores [XXX] con los valores del idioma seleccionado"""
     lang_config = LANGUAGES.get(language, LANGUAGES["english"])
     replacements = lang_config.get("replacements", {})
-    
     resultado = texto
     for marker, value in replacements.items():
         resultado = resultado.replace(marker, value)
-    
     return resultado
 
 # ======================
@@ -329,14 +399,13 @@ def marcare_come_inviate_threads(user_id: int, numeri: List[int]):
     salvare_stato_utente_threads(user_id)
 
 async def generare_variazione(model: str, language: str, frase_originale: str, frase_numero: int, variazione_num: int) -> str:
-    model_info = THREADS_MODELS[model]
+    global THREADS_MODELS
+    model_info = THREADS_MODELS.get(model, {"name": model, "origin": "None", "origin_text": "", "full_name": model})
     lang_info = LANGUAGES[language]
     
-    # Aplicar marcadores a la frase original
     frase_con_marcadores = aplicar_marcadores(frase_originale, language)
     
-    # Para Comments, no hay origen, solo generar variaciones
-    if model == "comments":
+    if model == "comments" or model_info.get("origin") == "None":
         system_prompt = f"""You are a copywriter. Create ONE variation of the given phrase in {lang_info['name']}.
 
 CRITICAL RULES:
@@ -355,7 +424,6 @@ Original phrase (number {frase_numero}):
 
 Generate variation number {variazione_num} in {lang_info['name']}, keeping the exact same format:"""
     else:
-        # Detectar si la frase original menciona nombre u origen
         menciona_nombre = model_info['full_name'].lower() in frase_originale.lower()
         menciona_origen = model_info['origin'].lower() in frase_originale.lower() or model_info['origin_text'].lower() in frase_originale.lower()
         
@@ -405,7 +473,7 @@ Generate variation number {variazione_num} in {lang_info['name']}, keeping the e
         return f"❌ Error: {str(e)}"
 
 # ======================
-# FUNZIONES FOTOS (USA E GETTA)
+# FUNCIONES FOTOS (USA E GETTA) - ACTUALIZADAS PARA CATEGORÍAS DINÁMICAS
 # ======================
 
 def init_fotos_db():
@@ -436,7 +504,7 @@ def aggiungere_foto_per_modello(photo_model: str, foto_path: str):
     nuovo_nome = f"{photo_model}_foto_{nuovo_id}{ext}"
     nuovo_path = os.path.join(PHOTOS_FOLDER, nuovo_nome)
     shutil.copy2(foto_path, nuovo_path)
-    fotos_global_state[photo_model]["metadata"][nuovo_id] = {"path": nuovo_path, "original_name": os.path.basename(foto_path), "used": False}
+    fotos_global_state[photo_model]["metadata"][str(nuovo_id)] = {"path": nuovo_path, "original_name": os.path.basename(foto_path), "used": False}
     fotos_global_state[photo_model]["total"] += 1
     fotos_global_state[photo_model]["disponibili"].append(nuovo_id)
     salvare_stato_fotos_globale()
@@ -450,9 +518,11 @@ def ottenere_foto_disponibili_per_modello(photo_model: str, quantita: int) -> Li
 def marcare_foto_come_usate_per_modello(photo_model: str, foto_ids: List[int]):
     if photo_model not in fotos_global_state: return
     for fid in foto_ids:
-        if fid in fotos_global_state[photo_model]["metadata"]:
-            fotos_global_state[photo_model]["metadata"][fid]["used"] = True
-            if fid in fotos_global_state[photo_model]["disponibili"]: fotos_global_state[photo_model]["disponibili"].remove(fid)
+        fid_str = str(fid)
+        if fid_str in fotos_global_state[photo_model]["metadata"]:
+            fotos_global_state[photo_model]["metadata"][fid_str]["used"] = True
+            if fid in fotos_global_state[photo_model]["disponibili"]:
+                fotos_global_state[photo_model]["disponibili"].remove(fid)
             fotos_global_state[photo_model]["usate"].append(fid)
     salvare_stato_fotos_globale()
 
@@ -466,7 +536,7 @@ def get_stato_fotos_per_modello(photo_model: str) -> tuple:
 def reset_fotos_per_modello(photo_model: str):
     global fotos_global_state
     if photo_model in fotos_global_state:
-        for fid, meta in fotos_global_state[photo_model].get("metadata", {}).items():
+        for fid_str, meta in fotos_global_state[photo_model].get("metadata", {}).items():
             path = meta.get("path")
             if path and os.path.exists(path):
                 try: os.unlink(path)
@@ -475,7 +545,7 @@ def reset_fotos_per_modello(photo_model: str):
     salvare_stato_fotos_globale()
 
 # ======================
-# FUNZIONI REELS (USA E GETTA PER IGUSER)
+# FUNCIONES REELS (USA E GETTA PER IGUSER)
 # ======================
 
 def init_reels_db():
@@ -506,7 +576,7 @@ def aggiungere_reel_per_iguser(iguser: str, reel_path: str):
     nuovo_nome = f"{iguser}_reel_{nuovo_id}{ext}"
     nuovo_path = os.path.join(REELS_FOLDER, nuovo_nome)
     shutil.copy2(reel_path, nuovo_path)
-    reels_global_state[iguser]["metadata"][nuovo_id] = {"path": nuovo_path, "original_name": os.path.basename(reel_path), "used": False}
+    reels_global_state[iguser]["metadata"][str(nuovo_id)] = {"path": nuovo_path, "original_name": os.path.basename(reel_path), "used": False}
     reels_global_state[iguser]["total"] += 1
     reels_global_state[iguser]["disponibili"].append(nuovo_id)
     salvare_stato_reels_globale()
@@ -516,13 +586,15 @@ def ottenere_reel_disponibile_per_iguser(iguser: str) -> Optional[int]:
     disponibili = [fid for fid, meta in reels_global_state[iguser]["metadata"].items() if not meta.get("used", False)]
     if not disponibili: return None
     random.shuffle(disponibili)
-    return disponibili[0]
+    return int(disponibili[0]) if disponibili else None
 
 def marcare_reel_come_usato_per_iguser(iguser: str, reel_id: int):
     if iguser not in reels_global_state: return
-    if reel_id in reels_global_state[iguser]["metadata"]:
-        reels_global_state[iguser]["metadata"][reel_id]["used"] = True
-        if reel_id in reels_global_state[iguser]["disponibili"]: reels_global_state[iguser]["disponibili"].remove(reel_id)
+    reel_id_str = str(reel_id)
+    if reel_id_str in reels_global_state[iguser]["metadata"]:
+        reels_global_state[iguser]["metadata"][reel_id_str]["used"] = True
+        if reel_id in reels_global_state[iguser]["disponibili"]:
+            reels_global_state[iguser]["disponibili"].remove(reel_id)
         reels_global_state[iguser]["usate"].append(reel_id)
     salvare_stato_reels_globale()
 
@@ -536,7 +608,7 @@ def get_stato_reels_per_iguser(iguser: str) -> tuple:
 def reset_reels_per_iguser(iguser: str):
     global reels_global_state
     if iguser in reels_global_state:
-        for fid, meta in reels_global_state[iguser].get("metadata", {}).items():
+        for fid_str, meta in reels_global_state[iguser].get("metadata", {}).items():
             path = meta.get("path")
             if path and os.path.exists(path):
                 try: os.unlink(path)
@@ -561,7 +633,322 @@ async def notificare_admin(context: ContextTypes.DEFAULT_TYPE, messaggio: str, i
         logger.error(f"Error sending admin notification: {e}")
 
 # ======================
-# FUNCIONES DE RESET CON CONFIRMACIÓN
+# FUNCIONES DE GESTIÓN DINÁMICA - THREADS
+# ======================
+
+async def admin_add_threads_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Inicia el proceso para añadir un nuevo modelo de threads"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    if user_id != ADMIN_USER_ID:
+        await query.answer("❌ Solo admin")
+        return
+    
+    await query.answer()
+    waiting_for_new_threads_model[user_id] = {"step": "name"}
+    
+    await query.edit_message_text(
+        "➕ <b>Add New Threads Model</b>\n\n"
+        "Step 1/4: Send the model name (display name with emoji if desired).\n"
+        "Example: <code>🇰🇷 Hana</code>\n\n"
+        "Type the name now:",
+        parse_mode="HTML"
+    )
+
+async def handle_new_threads_model_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Maneja la entrada para crear un nuevo modelo de threads"""
+    user_id = update.effective_user.id
+    
+    if user_id != ADMIN_USER_ID:
+        return
+    
+    if user_id not in waiting_for_new_threads_model:
+        return
+    
+    state = waiting_for_new_threads_model[user_id]
+    text = update.message.text.strip()
+    
+    if state["step"] == "name":
+        # Generar key a partir del nombre
+        model_key = text.lower().replace(" ", "_").replace("🇨🇳", "").replace("🇯🇵", "").replace("🇮🇹", "").replace("🇰🇷", "").strip()
+        # Asegurar que la key sea única
+        original_key = model_key
+        counter = 1
+        while model_key in THREADS_MODELS:
+            model_key = f"{original_key}_{counter}"
+            counter += 1
+        
+        state["model_key"] = model_key
+        state["display_name"] = text
+        state["step"] = "origin"
+        
+        await update.message.reply_text(
+            f"✅ Display name: {text}\n"
+            f"🔑 Model key: {model_key}\n\n"
+            "Step 2/4: Send the country of origin.\n"
+            "Example: <code>Korea</code>\n\n"
+            "Type the origin now:",
+            parse_mode="HTML"
+        )
+    
+    elif state["step"] == "origin":
+        state["origin"] = text
+        state["step"] = "origin_text"
+        
+        await update.message.reply_text(
+            f"✅ Origin: {text}\n\n"
+            "Step 3/4: Send the 'origin_text' (how the model says her origin).\n"
+            f"Example: <code>I'm {text}</code>\n\n"
+            "Type the origin text now:",
+            parse_mode="HTML"
+        )
+    
+    elif state["step"] == "origin_text":
+        state["origin_text"] = text
+        state["step"] = "full_name"
+        
+        await update.message.reply_text(
+            f"✅ Origin text: {text}\n\n"
+            "Step 4/4: Send the full name of the model.\n"
+            "Example: <code>Hana</code>\n\n"
+            "Type the full name now:",
+            parse_mode="HTML"
+        )
+    
+    elif state["step"] == "full_name":
+        state["full_name"] = text
+        
+        # Crear el nuevo modelo
+        new_model = {
+            "name": state["display_name"],
+            "origin": state["origin"],
+            "origin_text": state["origin_text"],
+            "full_name": state["full_name"]
+        }
+        
+        THREADS_MODELS[state["model_key"]] = new_model
+        save_threads_models(THREADS_MODELS)
+        
+        # Crear archivo de frases vacío para el nuevo modelo
+        salvare_frasi_per_modello(state["model_key"], [])
+        
+        await update.message.reply_text(
+            f"✅ <b>New threads model added successfully!</b>\n\n"
+            f"📝 Name: {state['display_name']}\n"
+            f"🔑 Key: {state['model_key']}\n"
+            f"🌍 Origin: {state['origin']}\n"
+            f"💬 Origin text: {state['origin_text']}\n"
+            f"👤 Full name: {state['full_name']}\n\n"
+            f"Now you can upload phrases for this model using:\n"
+            f"<code>/admin → Upload Threads → {state['display_name']}</code>",
+            parse_mode="HTML"
+        )
+        
+        del waiting_for_new_threads_model[user_id]
+        
+        # Notificar al admin
+        await notificare_admin(context, f"➕ Added new threads model: {state['display_name']} (key: {state['model_key']})", is_admin_action=True)
+
+# ======================
+# FUNCIONES DE GESTIÓN DINÁMICA - FOTOS
+# ======================
+
+async def admin_add_photo_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Inicia el proceso para añadir una nueva categoría de fotos"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    if user_id != ADMIN_USER_ID:
+        await query.answer("❌ Solo admin")
+        return
+    
+    await query.answer()
+    waiting_for_new_photo_category[user_id] = {"step": "category_name"}
+    
+    await query.edit_message_text(
+        "➕ <b>Add New Photo Category</b>\n\n"
+        "Step 1/2: Send the category name (with emoji if desired).\n"
+        "Example: <code>🇫🇷 French</code>\n\n"
+        "Type the category name now:",
+        parse_mode="HTML"
+    )
+
+async def handle_new_photo_category_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Maneja la entrada para crear una nueva categoría de fotos"""
+    user_id = update.effective_user.id
+    
+    if user_id != ADMIN_USER_ID:
+        return
+    
+    if user_id not in waiting_for_new_photo_category:
+        return
+    
+    state = waiting_for_new_photo_category[user_id]
+    text = update.message.text.strip()
+    
+    if state["step"] == "category_name":
+        # Generar key a partir del nombre
+        category_key = text.lower().replace(" ", "_").replace("🇫🇷", "").replace("🇪🇸", "").strip()
+        original_key = category_key
+        counter = 1
+        while category_key in PHOTO_CATEGORIES:
+            category_key = f"{original_key}_{counter}"
+            counter += 1
+        
+        state["category_key"] = category_key
+        state["display_name"] = text
+        state["step"] = "confirm"
+        
+        await update.message.reply_text(
+            f"✅ Category name: {text}\n"
+            f"🔑 Category key: {category_key}\n\n"
+            f"Send <code>/confirm</code> to add this category, or <code>/cancel</code> to abort.",
+            parse_mode="HTML"
+        )
+    
+    elif state["step"] == "confirm":
+        if text.lower() == "/confirm":
+            # Crear la nueva categoría
+            PHOTO_CATEGORIES[state["category_key"]] = {
+                "name": state["display_name"],
+                "models": {}
+            }
+            save_photo_categories(PHOTO_CATEGORIES)
+            
+            await update.message.reply_text(
+                f"✅ <b>New photo category added successfully!</b>\n\n"
+                f"📁 Category: {state['display_name']}\n"
+                f"🔑 Key: {state['category_key']}\n\n"
+                f"You can now add models to this category using:\n"
+                f"<code>/admin → Add Photo Model</code>",
+                parse_mode="HTML"
+            )
+            
+            await notificare_admin(context, f"➕ Added new photo category: {state['display_name']} (key: {state['category_key']})", is_admin_action=True)
+            
+        elif text.lower() == "/cancel":
+            await update.message.reply_text("❌ Operation cancelled.")
+        else:
+            await update.message.reply_text("Please type <code>/confirm</code> or <code>/cancel</code>", parse_mode="HTML")
+            return
+        
+        del waiting_for_new_photo_category[user_id]
+
+async def admin_add_photo_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Inicia el proceso para añadir un nuevo modelo de fotos"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    if user_id != ADMIN_USER_ID:
+        await query.answer("❌ Solo admin")
+        return
+    
+    await query.answer()
+    
+    # Mostrar categorías disponibles
+    keyboard = []
+    for cat_key, cat_data in PHOTO_CATEGORIES.items():
+        keyboard.append([InlineKeyboardButton(cat_data["name"], callback_data=f"add_photo_model_cat_{cat_key}")])
+    keyboard.append([InlineKeyboardButton("◀️ Back", callback_data="admin_back")])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(
+        "➕ <b>Add New Photo Model</b>\n\n"
+        "First, select the category for the new model:",
+        reply_markup=reply_markup,
+        parse_mode="HTML"
+    )
+
+async def admin_add_photo_model_category(update: Update, context: ContextTypes.DEFAULT_TYPE, category_key: str):
+    """Selecciona la categoría y pide el nombre del modelo"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    await query.answer()
+    waiting_for_new_photo_model[user_id] = {
+        "step": "model_name",
+        "category_key": category_key
+    }
+    
+    await query.edit_message_text(
+        f"➕ <b>Add New Photo Model to {PHOTO_CATEGORIES[category_key]['name']}</b>\n\n"
+        "Step 1/3: Send the model name (with emoji if desired).\n"
+        "Example: <code>🇰🇷 Jiyeon</code>\n\n"
+        "Type the model name now:",
+        parse_mode="HTML"
+    )
+
+async def handle_new_photo_model_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Maneja la entrada para crear un nuevo modelo de fotos"""
+    user_id = update.effective_user.id
+    
+    if user_id != ADMIN_USER_ID:
+        return
+    
+    if user_id not in waiting_for_new_photo_model:
+        return
+    
+    state = waiting_for_new_photo_model[user_id]
+    text = update.message.text.strip()
+    
+    if state["step"] == "model_name":
+        # Generar key a partir del nombre
+        model_key = text.lower().replace(" ", "_").replace("🇨🇳", "").replace("🇯🇵", "").replace("🇮🇹", "").replace("🇰🇷", "").replace("🇫🇷", "").strip()
+        original_key = model_key
+        counter = 1
+        while model_key in PHOTO_CATEGORIES[state["category_key"]]["models"]:
+            model_key = f"{original_key}_{counter}"
+            counter += 1
+        
+        state["model_key"] = model_key
+        state["display_name"] = text
+        state["step"] = "confirm"
+        
+        await update.message.reply_text(
+            f"✅ Model name: {text}\n"
+            f"🔑 Model key: {model_key}\n"
+            f"📁 Category: {PHOTO_CATEGORIES[state['category_key']]['name']}\n\n"
+            f"Send <code>/confirm</code> to add this model, or <code>/cancel</code> to abort.",
+            parse_mode="HTML"
+        )
+    
+    elif state["step"] == "confirm":
+        if text.lower() == "/confirm":
+            # Crear el nuevo modelo
+            PHOTO_CATEGORIES[state["category_key"]]["models"][state["model_key"]] = {
+                "name": state["display_name"],
+                "display": state["display_name"]
+            }
+            save_photo_categories(PHOTO_CATEGORIES)
+            
+            # Inicializar estado de fotos para el nuevo modelo
+            if state["model_key"] not in fotos_global_state:
+                fotos_global_state[state["model_key"]] = {"total": 0, "disponibili": [], "usate": [], "metadata": {}}
+                salvare_stato_fotos_globale()
+            
+            await update.message.reply_text(
+                f"✅ <b>New photo model added successfully!</b>\n\n"
+                f"📸 Model: {state['display_name']}\n"
+                f"🔑 Key: {state['model_key']}\n"
+                f"📁 Category: {PHOTO_CATEGORIES[state['category_key']]['name']}\n\n"
+                f"You can now upload photos for this model using:\n"
+                f"<code>/admin → Upload Photos → {PHOTO_CATEGORIES[state['category_key']]['name']} → {state['display_name']}</code>",
+                parse_mode="HTML"
+            )
+            
+            await notificare_admin(context, f"➕ Added new photo model: {state['display_name']} in category {PHOTO_CATEGORIES[state['category_key']]['name']}", is_admin_action=True)
+            
+        elif text.lower() == "/cancel":
+            await update.message.reply_text("❌ Operation cancelled.")
+        else:
+            await update.message.reply_text("Please type <code>/confirm</code> or <code>/cancel</code>", parse_mode="HTML")
+            return
+        
+        del waiting_for_new_photo_model[user_id]
+
+# ======================
+# FUNCIONES DE RESET CON CONFIRMACIÓN (ACTUALIZADAS)
 # ======================
 
 async def reset_photos_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -569,17 +956,10 @@ async def reset_photos_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     keyboard = []
-    asian_models = []
-    italian_models = []
+    for cat_key, cat_data in PHOTO_CATEGORIES.items():
+        for model_key, model_data in cat_data["models"].items():
+            keyboard.append([InlineKeyboardButton(f"{cat_data['name']} - {model_data['name']}", callback_data=f"reset_photo_{model_key}")])
     
-    for key, model in PHOTO_MODELS.items():
-        if model["category"] == "asian":
-            asian_models.append([InlineKeyboardButton(f"🇦🇸 {model['name']}", callback_data=f"reset_photo_{key}")])
-        else:
-            italian_models.append([InlineKeyboardButton(f"🇮🇹 {model['name']}", callback_data=f"reset_photo_{key}")])
-    
-    keyboard.extend(asian_models)
-    keyboard.extend(italian_models)
     keyboard.append([InlineKeyboardButton("◀️ Back to Admin Menu", callback_data="admin_back")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -627,7 +1007,14 @@ async def confirm_reset(update: Update, context: ContextTypes.DEFAULT_TYPE, rese
     await query.answer()
     
     if reset_type == "photo":
-        model_name = PHOTO_MODELS.get(target, {}).get("name", target)
+        # Buscar el nombre del modelo
+        model_name = target
+        for cat_key, cat_data in PHOTO_CATEGORIES.items():
+            for model_key, model_data in cat_data["models"].items():
+                if model_key == target:
+                    model_name = model_data["name"]
+                    break
+        
         message = f"⚠️ <b>CONFIRM RESET</b>\n\n"
         message += f"You are about to reset ALL photos for:\n"
         message += f"📸 <b>{model_name}</b>\n\n"
@@ -659,7 +1046,14 @@ async def execute_reset(update: Update, context: ContextTypes.DEFAULT_TYPE, rese
     
     if reset_type == "photo":
         reset_fotos_per_modello(target)
-        model_name = PHOTO_MODELS.get(target, {}).get("name", target)
+        # Buscar el nombre del modelo
+        model_name = target
+        for cat_key, cat_data in PHOTO_CATEGORIES.items():
+            for model_key, model_data in cat_data["models"].items():
+                if model_key == target:
+                    model_name = model_data["name"]
+                    break
+        
         message = f"✅ <b>Photos reset successfully!</b>\n\n"
         message += f"📸 Model: {model_name}\n"
         message += f"All photos for this model have been deleted."
@@ -676,7 +1070,7 @@ async def execute_reset(update: Update, context: ContextTypes.DEFAULT_TYPE, rese
     await notificare_admin(context, f"🔄 Reset completed: {reset_type} - {target}", is_admin_action=True)
 
 # ======================
-# MENU ADMIN (principal)
+# MENU ADMIN (principal) - ACTUALIZADO
 # ======================
 
 async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -688,6 +1082,9 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📝 Upload Threads", callback_data="admin_threads")],
         [InlineKeyboardButton("📸 Upload Photos", callback_data="admin_photos")],
         [InlineKeyboardButton("🎬 Upload Reels", callback_data="admin_reels")],
+        [InlineKeyboardButton("➕ Add Threads Model", callback_data="admin_add_threads_model")],
+        [InlineKeyboardButton("➕ Add Photo Category", callback_data="admin_add_photo_category")],
+        [InlineKeyboardButton("➕ Add Photo Model", callback_data="admin_add_photo_model")],
         [InlineKeyboardButton("🔄 Reset Photos", callback_data="admin_reset_photos")],
         [InlineKeyboardButton("🔄 Reset Reels", callback_data="admin_reset_reels")]
     ]
@@ -697,38 +1094,34 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_threads_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    keyboard = [
-        [InlineKeyboardButton(THREADS_MODELS["mila"]["name"], callback_data="admin_threads_mila")],
-        [InlineKeyboardButton(THREADS_MODELS["yuna"]["name"], callback_data="admin_threads_yuna")],
-        [InlineKeyboardButton(THREADS_MODELS["ita"]["name"], callback_data="admin_threads_ita")],
-        [InlineKeyboardButton(THREADS_MODELS["comments"]["name"], callback_data="admin_threads_comments")],
-        [InlineKeyboardButton("◀️ Back", callback_data="admin_back")]
-    ]
+    keyboard = []
+    for key, model in THREADS_MODELS.items():
+        keyboard.append([InlineKeyboardButton(model["name"], callback_data=f"admin_threads_{key}")])
+    keyboard.append([InlineKeyboardButton("◀️ Back", callback_data="admin_back")])
+    
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text("📝 <b>Select model to upload THREADS:</b>", reply_markup=reply_markup, parse_mode="HTML")
 
 async def admin_photos_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    keyboard = [
-        [InlineKeyboardButton("🇦🇸 Asian Models", callback_data="admin_photos_asian")],
-        [InlineKeyboardButton("🇮🇹 Italian Models", callback_data="admin_photos_italian")],
-        [InlineKeyboardButton("◀️ Back", callback_data="admin_back")]
-    ]
+    keyboard = []
+    for cat_key, cat_data in PHOTO_CATEGORIES.items():
+        keyboard.append([InlineKeyboardButton(cat_data["name"], callback_data=f"admin_photos_{cat_key}")])
+    keyboard.append([InlineKeyboardButton("◀️ Back", callback_data="admin_back")])
+    
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text("📸 <b>Select category for PHOTOS:</b>", reply_markup=reply_markup, parse_mode="HTML")
 
-async def admin_photos_models(update: Update, context: ContextTypes.DEFAULT_TYPE, category: str):
+async def admin_photos_models(update: Update, context: ContextTypes.DEFAULT_TYPE, category_key: str):
     query = update.callback_query
     await query.answer()
     keyboard = []
-    for key, model in PHOTO_MODELS.items():
-        if model["category"] == category:
-            keyboard.append([InlineKeyboardButton(model["name"], callback_data=f"admin_photos_model_{key}")])
+    for model_key, model_data in PHOTO_CATEGORIES[category_key]["models"].items():
+        keyboard.append([InlineKeyboardButton(model_data["name"], callback_data=f"admin_photos_model_{model_key}")])
     keyboard.append([InlineKeyboardButton("◀️ Back", callback_data="admin_photos")])
     reply_markup = InlineKeyboardMarkup(keyboard)
-    category_name = "Asian" if category == "asian" else "Italian"
-    await query.edit_message_text(f"📸 <b>Select model ({category_name}) to upload PHOTOS:</b>", reply_markup=reply_markup, parse_mode="HTML")
+    await query.edit_message_text(f"📸 <b>Select model for {PHOTO_CATEGORIES[category_key]['name']}:</b>", reply_markup=reply_markup, parse_mode="HTML")
 
 async def admin_reels_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -768,7 +1161,7 @@ async def admin_handle_reels_iguser(update: Update, context: ContextTypes.DEFAUL
     )
 
 # ======================
-# MENU USUARIO
+# MENU USUARIO - ACTUALIZADO CON MODELOS DINÁMICOS
 # ======================
 
 async def user_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -802,25 +1195,30 @@ async def user_threads_language(update: Update, context: ContextTypes.DEFAULT_TY
 async def user_photos_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    keyboard = [
-        [InlineKeyboardButton("🇦🇸 Asian Models", callback_data="user_photos_asian")],
-        [InlineKeyboardButton("🇮🇹 Italian Models", callback_data="user_photos_italian")],
-        [InlineKeyboardButton("◀️ Back", callback_data="user_back")]
-    ]
+    keyboard = []
+    for cat_key, cat_data in PHOTO_CATEGORIES.items():
+        keyboard.append([InlineKeyboardButton(cat_data["name"], callback_data=f"user_photos_{cat_key}")])
+    keyboard.append([InlineKeyboardButton("◀️ Back", callback_data="user_back")])
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text("📸 <b>Select category for PHOTOS:</b>", reply_markup=reply_markup, parse_mode="HTML")
 
-async def user_photos_models(update: Update, context: ContextTypes.DEFAULT_TYPE, category: str):
+async def user_photos_models(update: Update, context: ContextTypes.DEFAULT_TYPE, category_key: str):
     query = update.callback_query
     await query.answer()
     keyboard = []
-    for key, model in PHOTO_MODELS.items():
-        if model["category"] == category:
-            keyboard.append([InlineKeyboardButton(model["name"], callback_data=f"user_photos_model_{key}")])
+    for model_key, model_data in PHOTO_CATEGORIES[category_key]["models"].items():
+        # Verificar si hay fotos disponibles
+        _, disponibili, _ = get_stato_fotos_per_modello(model_key)
+        status_icon = "🟢" if disponibili > 0 else "🔴"
+        keyboard.append([InlineKeyboardButton(f"{status_icon} {model_data['name']}", callback_data=f"user_photos_model_{model_key}")])
     keyboard.append([InlineKeyboardButton("◀️ Back", callback_data="user_photos")])
     reply_markup = InlineKeyboardMarkup(keyboard)
-    category_name = "Asian" if category == "asian" else "Italian"
-    await query.edit_message_text(f"📸 <b>Select model ({category_name}) for PHOTOS:</b>", reply_markup=reply_markup, parse_mode="HTML")
+    await query.edit_message_text(
+        f"📸 <b>Select model for {PHOTO_CATEGORIES[category_key]['name']}:</b>\n\n"
+        f"🟢 = Photos available | 🔴 = No photos available",
+        reply_markup=reply_markup,
+        parse_mode="HTML"
+    )
 
 async def user_reels_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -858,7 +1256,7 @@ async def user_handle_reel_request(update: Update, context: ContextTypes.DEFAULT
     if not reel_id:
         await update.message.reply_text(f"❌ No reels available for @{iguser}. Please try again later.")
         return
-    metadata = reels_global_state[iguser]["metadata"].get(reel_id, {})
+    metadata = reels_global_state[iguser]["metadata"].get(str(reel_id), {})
     reel_path = metadata.get("path")
     if reel_path and os.path.exists(reel_path):
         try:
@@ -875,7 +1273,7 @@ async def user_handle_reel_request(update: Update, context: ContextTypes.DEFAULT
         await update.message.reply_text("❌ Reel file not found. Please try again.")
 
 # ======================
-# MANEJADOR PRINCIPAL DE CALLBACKS
+# MANEJADOR PRINCIPAL DE CALLBACKS - ACTUALIZADO
 # ======================
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -904,11 +1302,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "admin_photos":
         await admin_photos_category(update, context)
     
-    elif data == "admin_photos_asian":
-        await admin_photos_models(update, context, "asian")
-    
-    elif data == "admin_photos_italian":
-        await admin_photos_models(update, context, "italian")
+    elif data.startswith("admin_photos_") and data not in ["admin_photos", "admin_photos_asian", "admin_photos_italian"]:
+        category_key = data.replace("admin_photos_", "")
+        if category_key in PHOTO_CATEGORIES:
+            await admin_photos_models(update, context, category_key)
     
     elif data.startswith("admin_photos_model_"):
         photo_model = data.replace("admin_photos_model_", "")
@@ -916,7 +1313,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user_id not in pending_uploads:
             pending_uploads[user_id] = {"type": "photos", "target": photo_model, "files": []}
         await query.edit_message_text(
-            f"📸 **Uploading photos for {PHOTO_MODELS[photo_model]['name']}**\n\n"
+            f"📸 **Uploading photos for {photo_model}**\n\n"
             "Send photos (one or more at a time).\n"
             "When done, type <code>/done</code>\n\n"
             f"⏳ Photos received: 0",
@@ -925,6 +1322,20 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif data == "admin_reels":
         await admin_reels_prompt(update, context)
+    
+    # ADMIN ADD CALLBACKS
+    elif data == "admin_add_threads_model":
+        await admin_add_threads_model(update, context)
+    
+    elif data == "admin_add_photo_category":
+        await admin_add_photo_category(update, context)
+    
+    elif data == "admin_add_photo_model":
+        await admin_add_photo_model(update, context)
+    
+    elif data.startswith("add_photo_model_cat_"):
+        category_key = data.replace("add_photo_model_cat_", "")
+        await admin_add_photo_model_category(update, context, category_key)
     
     # ADMIN RESET CALLBACKS
     elif data == "admin_reset_photos":
@@ -980,18 +1391,26 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "user_photos":
         await user_photos_category(update, context)
     
-    elif data == "user_photos_asian":
-        await user_photos_models(update, context, "asian")
-    
-    elif data == "user_photos_italian":
-        await user_photos_models(update, context, "italian")
+    elif data.startswith("user_photos_") and data not in ["user_photos", "user_photos_asian", "user_photos_italian"]:
+        category_key = data.replace("user_photos_", "")
+        if category_key in PHOTO_CATEGORIES:
+            await user_photos_models(update, context, category_key)
     
     elif data.startswith("user_photos_model_"):
         photo_model = data.replace("user_photos_model_", "")
         set_user_photo_model(user_id, photo_model)
+        
+        # Buscar el nombre del modelo
+        model_name = photo_model
+        for cat_key, cat_data in PHOTO_CATEGORIES.items():
+            for model_key, model_data in cat_data["models"].items():
+                if model_key == photo_model:
+                    model_name = model_data["name"]
+                    break
+        
         await query.edit_message_text(
             f"✅ <b>Photos configured!</b>\n\n"
-            f"📸 Model: {PHOTO_MODELS[photo_model]['name']}\n\n"
+            f"📸 Model: {model_name}\n\n"
             f"📝 Now type the number of photos you want!\n"
             f"Example: <code>3</code>\n\n"
             f"⚠️ Photos are ONE-TIME USE!",
@@ -1002,7 +1421,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await user_reels_prompt(update, context)
 
 # ======================
-# HANDLERS DE ARCHIVOS (Admin)
+# HANDLERS DE ARCHIVOS (Admin) - IGUALES QUE ANTES
 # ======================
 
 async def receive_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1085,7 +1504,6 @@ async def receive_media_upload(update: Update, context: ContextTypes.DEFAULT_TYP
     user = update.effective_user
     user_id = user.id
     
-    # Verificar si hay una sesión activa de carga
     has_session = False
     upload_type = None
     target = None
@@ -1113,7 +1531,6 @@ async def receive_media_upload(update: Update, context: ContextTypes.DEFAULT_TYP
     added = 0
     temp_path = None
     
-    # Caso 1: Video directo
     if update.message.video:
         video = update.message.video
         file = await context.bot.get_file(video.file_id)
@@ -1125,7 +1542,6 @@ async def receive_media_upload(update: Update, context: ContextTypes.DEFAULT_TYP
         added += 1
         logger.info(f"Video received: {video.file_name if video.file_name else 'unknown'}")
     
-    # Caso 2: Video note (circular)
     elif update.message.video_note:
         video_note = update.message.video_note
         file = await context.bot.get_file(video_note.file_id)
@@ -1133,7 +1549,6 @@ async def receive_media_upload(update: Update, context: ContextTypes.DEFAULT_TYP
         await file.download_to_drive(temp_path)
         added += 1
     
-    # Caso 3: Animación/GIF
     elif update.message.animation:
         animation = update.message.animation
         file = await context.bot.get_file(animation.file_id)
@@ -1144,7 +1559,6 @@ async def receive_media_upload(update: Update, context: ContextTypes.DEFAULT_TYP
         await file.download_to_drive(temp_path)
         added += 1
     
-    # Caso 4: Foto
     elif update.message.photo:
         photo = update.message.photo[-1]
         file = await context.bot.get_file(photo.file_id)
@@ -1152,14 +1566,12 @@ async def receive_media_upload(update: Update, context: ContextTypes.DEFAULT_TYP
         await file.download_to_drive(temp_path)
         added += 1
     
-    # Caso 5: Documento (archivo) - IMPORTANTE para .mov
     elif update.message.document:
         doc = update.message.document
         file_name = doc.file_name or ""
         file_ext = os.path.splitext(file_name)[1].lower() if file_name else ""
         mime_type = doc.mime_type or ""
         
-        # Detectar por extensión O por mime_type
         is_video = file_ext in ['.mov', '.mp4', '.avi', '.mkv', '.webm', '.m4v'] or mime_type.startswith('video/')
         is_image = file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'] or mime_type.startswith('image/')
         
@@ -1174,9 +1586,8 @@ async def receive_media_upload(update: Update, context: ContextTypes.DEFAULT_TYP
         pending_uploads[user_id]["files"].append(temp_path)
         total = len(pending_uploads[user_id]["files"])
         type_name = "photos" if upload_type == "photos" else "reels"
-        target_name = target if upload_type == "reels" else PHOTO_MODELS.get(target, {}).get("name", target)
+        target_name = target if upload_type == "reels" else target
         
-        # Confirmar CADA 50 fotos (PHOTO_CONFIRMATION_BATCH)
         if upload_type == "photos":
             if total % PHOTO_CONFIRMATION_BATCH == 0:
                 await update.message.reply_text(
@@ -1184,7 +1595,6 @@ async def receive_media_upload(update: Update, context: ContextTypes.DEFAULT_TYP
                     parse_mode="HTML"
                 )
         else:
-            # Para reels, confirmar cada uno (pocos)
             await update.message.reply_text(
                 f"✅ Received: {total} {type_name} for {target_name}",
                 parse_mode="HTML"
@@ -1235,7 +1645,6 @@ async def done_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(f"Error processing file {path}: {e}")
     
-    # Limpiar archivos temporales
     for path in files:
         if os.path.exists(path):
             try:
@@ -1248,7 +1657,7 @@ async def done_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if upload_type == "photos":
         used, available, total = get_stato_fotos_per_modello(target)
         await status_msg.edit_text(
-            f"✅ <b>Photos for {PHOTO_MODELS[target]['name']} loaded!</b>\n\n"
+            f"✅ <b>Photos loaded successfully!</b>\n\n"
             f"📸 Added: {success_count}/{total_files}\n"
             f"📊 Total in pool: {total}\n"
             f"⏳ Available: {available}\n"
@@ -1258,7 +1667,7 @@ async def done_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         used, available, total = get_stato_reels_per_iguser(target)
         await status_msg.edit_text(
-            f"✅ <b>Reels for @{target} loaded!</b>\n\n"
+            f"✅ <b>Reels loaded successfully for @{target}!</b>\n\n"
             f"🎬 Added: {success_count}/{total_files}\n"
             f"📊 Total in pool: {total}\n"
             f"⏳ Available: {available}\n"
@@ -1323,9 +1732,9 @@ async def send_photos_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE
     username = user.username or user.first_name
     used, available, total = get_stato_fotos_per_modello(photo_model)
     if available <= THRESHOLD_FOTOS and available > 0:
-        await notificare_admin(context, f"⚠️ <b>LOW PHOTOS - {PHOTO_MODELS[photo_model]['name']}!</b>\n📸 Available: {available}", is_admin_action=True)
+        await notificare_admin(context, f"⚠️ <b>LOW PHOTOS - {photo_model}!</b>\n📸 Available: {available}", is_admin_action=True)
     if total == 0 or available == 0:
-        await update.message.reply_text(f"❌ No photos for {PHOTO_MODELS[photo_model]['name']}.")
+        await update.message.reply_text(f"❌ No photos for {photo_model}.")
         return
     if available < quantity:
         await update.message.reply_text(f"⚠️ Only {available} photos available.\nSending {available} instead.")
@@ -1334,7 +1743,7 @@ async def send_photos_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(f"📸 Sending {len(photo_ids)} photos...")
     sent = []
     for i, fid in enumerate(photo_ids, 1):
-        path = fotos_global_state[photo_model]["metadata"][fid]["path"]
+        path = fotos_global_state[photo_model]["metadata"][str(fid)]["path"]
         if path and os.path.exists(path):
             try:
                 with open(path, 'rb') as f:
@@ -1518,6 +1927,24 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await user_menu(update, context)
 
 # ======================
+# FUNCIONES PARA MANEJAR ENTRADA DE TEXTO (CREACIÓN DINÁMICA)
+# ======================
+
+async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Maneja entradas de texto para creación dinámica (threads models, photo categories, photo models)"""
+    user_id = update.effective_user.id
+    
+    if user_id != ADMIN_USER_ID:
+        return
+    
+    if user_id in waiting_for_new_threads_model:
+        await handle_new_threads_model_input(update, context)
+    elif user_id in waiting_for_new_photo_category:
+        await handle_new_photo_category_input(update, context)
+    elif user_id in waiting_for_new_photo_model:
+        await handle_new_photo_model_input(update, context)
+
+# ======================
 # MAIN
 # ======================
 
@@ -1526,7 +1953,7 @@ def main():
     os.makedirs(PHOTOS_FOLDER, exist_ok=True)
     os.makedirs(REELS_FOLDER, exist_ok=True)
     
-    # Inicializar archivos de frases para todos los modelos (incluyendo Comments)
+    # Inicializar archivos de frases para todos los modelos
     for model in THREADS_MODELS:
         if not os.path.exists(os.path.join(DATA_FOLDER, f"frases_{model}.json")):
             salvare_frasi_per_modello(model, [])
@@ -1562,6 +1989,9 @@ def main():
     # Admin reel iguser input
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_handle_reels_iguser))
     
+    # Text input handler for dynamic creation
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
+    
     # Callback handler
     application.add_handler(CallbackQueryHandler(handle_callback))
     
@@ -1578,10 +2008,14 @@ def main():
     print(f"👑 Admin: @{ADMIN_USERNAME}")
     print("=" * 60)
     print("📌 THREADS MODELS:")
-    print("  • 🇨🇳 Mila")
-    print("  • 🇯🇵 Yuna")
-    print("  • 🇮🇹 ITA Models")
-    print("  • 💬 Comments")
+    for key, model in THREADS_MODELS.items():
+        print(f"  • {model['name']} (key: {key})")
+    print("=" * 60)
+    print("📌 PHOTO CATEGORIES:")
+    for cat_key, cat_data in PHOTO_CATEGORIES.items():
+        print(f"  • {cat_data['name']} (key: {cat_key})")
+        for model_key, model_data in cat_data["models"].items():
+            print(f"    - {model_data['name']} (key: {model_key})")
     print("=" * 60)
     print("👑 ADMIN COMMANDS:")
     print("  • /admin - Open admin menu")
