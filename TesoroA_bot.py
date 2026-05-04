@@ -79,7 +79,8 @@ DEFAULT_LANGUAGES = {
         }
     },
     "german": {
-        "name": "🇩🇪 Deutsch", "code": "de",
+        "name": "🇩🇪 Deutsch",
+        "code": "de",
         "replacements": {
             "[MEN]": "deutsche Männer", "[MEN_SINGULAR]": "ein deutscher Mann",
             "[COUNTRY]": "Deutschland", "[COUNTRY_ADJ]": "deutsche", "[FLAG]": "🇩🇪",
@@ -87,7 +88,8 @@ DEFAULT_LANGUAGES = {
         }
     },
     "english": {
-        "name": "🇺🇸 English", "code": "en",
+        "name": "🇺🇸 English",
+        "code": "en",
         "replacements": {
             "[MEN]": "American men", "[MEN_SINGULAR]": "an American man",
             "[COUNTRY]": "USA", "[COUNTRY_ADJ]": "American", "[FLAG]": "🇺🇸",
@@ -95,7 +97,8 @@ DEFAULT_LANGUAGES = {
         }
     },
     "spanish": {
-        "name": "🇪🇸 Español", "code": "es",
+        "name": "🇪🇸 Español",
+        "code": "es",
         "replacements": {
             "[MEN]": "hombres españoles", "[MEN_SINGULAR]": "un hombre español",
             "[COUNTRY]": "España", "[COUNTRY_ADJ]": "española", "[FLAG]": "🇪🇸",
@@ -103,7 +106,8 @@ DEFAULT_LANGUAGES = {
         }
     },
     "french": {
-        "name": "🇫🇷 Français", "code": "fr",
+        "name": "🇫🇷 Français",
+        "code": "fr",
         "replacements": {
             "[MEN]": "hommes français", "[MEN_SINGULAR]": "un homme français",
             "[COUNTRY]": "France", "[COUNTRY_ADJ]": "française", "[FLAG]": "🇫🇷",
@@ -241,13 +245,6 @@ def get_photo_stats(model):
     total = fotos_global_state[model].get("total", 0)
     return used, avail, total
 
-def get_all_photo_models():
-    models = []
-    for cat in PHOTO_CATEGORIES.values():
-        for model_key, model_data in cat["models"].items():
-            models.append((model_key, model_data["name"], cat["name"]))
-    return models
-
 # ======================
 # NOTIFICACIONES
 # ======================
@@ -259,7 +256,7 @@ async def notify_admin(context, msg, is_admin=False):
         logger.error(f"Notify error: {e}")
 
 # ======================
-# FUNCIONES API DEEPSEEK (SIMPLIFICADAS)
+# FUNCIONES API DEEPSEEK
 # ======================
 
 def aplicar_marcadores(texto, language):
@@ -305,7 +302,7 @@ Generate variation {variazione_num} in {lang_info['name']}:"""
         return f"❌ Error: {str(e)}"
 
 # ======================
-# CREACIÓN DE MODELOS
+# CREACIÓN DE MODELOS (THREADS)
 # ======================
 
 async def add_threads_model_start(update, context):
@@ -368,7 +365,7 @@ async def add_threads_model_input(update, context):
         del waiting_for_new_threads_model[uid]
 
 # ======================
-# ELIMINACIÓN DE MODELOS
+# ELIMINACIÓN DE MODELOS (THREADS)
 # ======================
 
 async def delete_threads_model_menu(update, context):
@@ -403,12 +400,10 @@ async def execute_delete_threads_model(update, context, model_key):
     await query.answer()
     model_name = THREADS_MODELS[model_key]["name"]
     
-    # Eliminar archivo de frases
     frases_file = os.path.join(DATA_FOLDER, f"frases_{model_key}.json")
     if os.path.exists(frases_file):
         os.remove(frases_file)
     
-    # Eliminar modelo
     del THREADS_MODELS[model_key]
     save_all()
     
@@ -489,7 +484,6 @@ async def execute_delete_photo_category(update, context, cat_key):
     await query.answer()
     cat_name = PHOTO_CATEGORIES[cat_key]["name"]
     
-    # Eliminar todos los modelos y sus fotos
     for model_key in list(PHOTO_CATEGORIES[cat_key]["models"].keys()):
         if model_key in fotos_global_state:
             for meta in fotos_global_state[model_key].get("meta", {}).values():
@@ -584,7 +578,6 @@ async def delete_photo_model_menu(update, context):
 async def confirm_delete_photo_model(update, context, model_key):
     query = update.callback_query
     await query.answer()
-    # Buscar nombre del modelo
     model_name = model_key
     cat_name = ""
     for cat_key, cat in PHOTO_CATEGORIES.items():
@@ -605,7 +598,6 @@ async def confirm_delete_photo_model(update, context, model_key):
 async def execute_delete_photo_model(update, context, model_key):
     query = update.callback_query
     await query.answer()
-    # Buscar nombre
     model_name = model_key
     cat_key = None
     for ck, cat in PHOTO_CATEGORIES.items():
@@ -614,7 +606,6 @@ async def execute_delete_photo_model(update, context, model_key):
             cat_key = ck
             break
     
-    # Eliminar fotos físicas
     if model_key in fotos_global_state:
         for meta in fotos_global_state[model_key].get("meta", {}).values():
             if os.path.exists(meta["path"]):
@@ -624,7 +615,6 @@ async def execute_delete_photo_model(update, context, model_key):
                     pass
         del fotos_global_state[model_key]
     
-    # Eliminar del modelo
     if cat_key and model_key in PHOTO_CATEGORIES[cat_key]["models"]:
         del PHOTO_CATEGORIES[cat_key]["models"][model_key]
     save_all()
@@ -786,10 +776,15 @@ async def handle_callback(update, context):
     query = update.callback_query
     data = query.data
     user_id = query.from_user.id
+    user = query.from_user
+    username = user.username or user.first_name
     
     # Navegación principal
     if data == "admin_back":
         await admin_menu(update, context)
+        return
+    if data == "user_back":
+        await user_menu(update, context)
         return
     
     # ADMIN - UPLOAD THREADS
@@ -903,6 +898,10 @@ async def handle_callback(update, context):
         model = parts[3]
         lang = parts[4]
         set_user_cfg(user_id, model=model, lang=lang)
+        
+        # NOTIFICACIÓN: Usuario cambió configuración
+        await notify_admin(context, f"⚙️ <b>@{username}</b> changed settings: {THREADS_MODELS[model]['name']} / {LANGUAGES[lang]['name']}")
+        
         await query.edit_message_text(
             f"✅ Configured!\n\n🌸 {THREADS_MODELS[model]['name']}\n🌍 {LANGUAGES[lang]['name']}\n\nNow type number of threads (e.g., 5)",
             parse_mode="HTML"
@@ -935,11 +934,6 @@ async def handle_callback(update, context):
             parse_mode="HTML"
         )
         return
-    
-    # USER - BACK
-    if data == "user_back":
-        await user_menu(update, context)
-        return
 
 # ======================
 # HANDLERS DE TEXTO Y ARCHIVOS
@@ -947,6 +941,8 @@ async def handle_callback(update, context):
 
 async def handle_text(update, context):
     user_id = update.effective_user.id
+    user = update.effective_user
+    username = user.username or user.first_name
     text = update.message.text.strip()
     
     # Admin: creación de modelos
@@ -975,6 +971,9 @@ async def handle_text(update, context):
         if user_id in user_photo_config and user_photo_config[user_id].get("waiting"):
             model = user_photo_config[user_id].get("photo_model")
             if model:
+                # NOTIFICACIÓN: Usuario pidió fotos
+                await notify_admin(context, f"📸 <b>@{username}</b> requested {qty} photos for {model}")
+                
                 used, avail, total = get_photo_stats(model)
                 if avail <= THRESHOLD_FOTOS and avail > 0:
                     await notify_admin(context, f"⚠️ LOW PHOTOS {model}: {avail} left", True)
@@ -986,7 +985,6 @@ async def handle_text(update, context):
                     await update.message.reply_text(f"⚠️ Only {avail} available. Sending {avail}.")
                     qty = avail
                 
-                # Obtener fotos
                 available = [int(i) for i, m in fotos_global_state[model]["meta"].items() if not m["used"]]
                 random.shuffle(available)
                 photo_ids = available[:qty]
@@ -1021,7 +1019,9 @@ async def handle_text(update, context):
         model = cfg["threads_model"]
         lang = cfg["threads_language"]
         
-        # Cargar frases del modelo
+        # NOTIFICACIÓN: Usuario pidió threads
+        await notify_admin(context, f"🔄 <b>@{username}</b> requested {len(numbers)} threads | Model: {THREADS_MODELS[model]['name']} | Language: {LANGUAGES[lang]['name']}")
+        
         frases_file = os.path.join(DATA_FOLDER, f"frases_{model}.json")
         if not os.path.exists(frases_file):
             await update.message.reply_text(f"❌ No phrases for {THREADS_MODELS[model]['name']}.")
@@ -1170,8 +1170,11 @@ async def start(update, context):
     user = update.effective_user
     uid = user.id
     name = user.username or user.first_name
+    
+    # NOTIFICACIÓN: Nuevo usuario
     if uid != ADMIN_USER_ID:
-        await notify_admin(context, f"👤 New user: @{name}")
+        await notify_admin(context, f"👤 <b>New user:</b> @{name} (ID: {uid})")
+    
     cfg = get_user_cfg(uid)
     model = THREADS_MODELS[cfg["threads_model"]]["name"]
     lang = LANGUAGES[cfg["threads_language"]]["name"]
@@ -1227,16 +1230,17 @@ def main():
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, receive_media))
     
     print("=" * 60)
-    print("✅ BOT CORREGIDO - CON MENÚ ADMIN COMPLETO")
+    print("✅ BOT CORREGIDO - CON NOTIFICACIONES")
     print("=" * 60)
     print(f"🤖 Bot online con token de entorno")
     print(f"👑 Admin: @{ADMIN_USERNAME}")
     print("=" * 60)
-    print("📝 ADMIN MENU:")
-    print("  • Upload Threads / Add / Delete")
-    print("  • Upload Photos / Add Category / Delete Category")
-    print("  • Add Photo Model / Delete Photo Model")
-    print("  • Add Language")
+    print("📝 NOTIFICACIONES ACTIVAS:")
+    print("  • Nuevos usuarios")
+    print("  • Solicitudes de threads")
+    print("  • Solicitudes de fotos")
+    print("  • Cambios de configuración")
+    print("  • Bajas existencias (fotos)")
     print("=" * 60)
     
     app.run_polling()
