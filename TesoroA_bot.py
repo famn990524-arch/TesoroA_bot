@@ -13,17 +13,21 @@ import shutil
 import time
 
 # ======================
-# CONFIGURAZIONE
+# CONFIGURAZIONE - VARIABLES DE ENTORNO
 # ======================
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("❌ BOT_TOKEN no configurado en variables de entorno")
 
-DEEPSEEK_API_KEY = "sk-7e2b6eb1c4ff4b4aa1046a6ae500a40e"
-ADMIN_USER_ID = 7097140504
-ADMIN_USERNAME = "famn25"
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+if not DEEPSEEK_API_KEY:
+    raise ValueError("❌ DEEPSEEK_API_KEY no configurado en variables de entorno")
 
+ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID", 7097140504))
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "famn25")
+
+# Configuración de archivos y carpetas
 if os.path.exists('/app'):
     DATA_FOLDER = "/app/data"
 else:
@@ -39,9 +43,9 @@ USER_STATE_FILE = os.path.join(DATA_FOLDER, "user_state.json")
 PHOTOS_FOLDER = os.path.join(DATA_FOLDER, "fotos")
 FRASES_FOLDER = os.path.join(DATA_FOLDER, "frases")
 
-MAX_VARIATIONS = 50
-THRESHOLD_FOTOS = 40
-PHOTO_CONFIRMATION_BATCH = 50
+MAX_VARIATIONS = int(os.getenv("MAX_VARIATIONS", 50))
+THRESHOLD_FOTOS = int(os.getenv("THRESHOLD_FOTOS", 40))
+PHOTO_CONFIRMATION_BATCH = int(os.getenv("PHOTO_CONFIRMATION_BATCH", 50))
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -223,10 +227,10 @@ def save_user_state(user_id, sent, total):
 def get_numbers(user_id, qty):
     state = get_user_state(user_id)
     used = set(state["sent"])
-    available = [n for n in range(1, 51) if n not in used]
+    available = [n for n in range(1, MAX_VARIATIONS + 1) if n not in used]
     if not available:
         used = set()
-        available = list(range(1, 51))
+        available = list(range(1, MAX_VARIATIONS + 1))
     random.shuffle(available)
     return available[:qty], used
 
@@ -963,8 +967,8 @@ async def handle_text(update, context):
     # Números para threads/fotos
     if text.isdigit():
         qty = int(text)
-        if qty < 1 or qty > 50:
-            await update.message.reply_text("❌ Number 1-50")
+        if qty < 1 or qty > MAX_VARIATIONS:
+            await update.message.reply_text(f"❌ Number 1-{MAX_VARIATIONS}")
             return
         
         # Verificar si está esperando fotos
@@ -1187,7 +1191,7 @@ async def status_cmd(update, context):
     uid = update.effective_user.id
     state = get_user_state(uid)
     total = state["total"]
-    remaining = 50 - (total % 50)
+    remaining = MAX_VARIATIONS - (total % MAX_VARIATIONS)
     cfg = get_user_cfg(uid)
     model = THREADS_MODELS[cfg["threads_model"]]["name"]
     lang = LANGUAGES[cfg["threads_language"]]["name"]
@@ -1230,7 +1234,7 @@ def main():
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, receive_media))
     
     print("=" * 60)
-    print("✅ BOT CORREGIDO - CON NOTIFICACIONES")
+    print("✅ BOT CONFIGURADO CON VARIABLES DE ENTORNO")
     print("=" * 60)
     print(f"🤖 Bot online con token de entorno")
     print(f"👑 Admin: @{ADMIN_USERNAME}")
@@ -1241,6 +1245,14 @@ def main():
     print("  • Solicitudes de fotos")
     print("  • Cambios de configuración")
     print("  • Bajas existencias (fotos)")
+    print("=" * 60)
+    print("📌 VARIABLES DE ENTORNO USADAS:")
+    print(f"  BOT_TOKEN: {'✅ Configurado' if BOT_TOKEN else '❌ Faltante'}")
+    print(f"  DEEPSEEK_API_KEY: {'✅ Configurado' if DEEPSEEK_API_KEY else '❌ Faltante'}")
+    print(f"  ADMIN_USER_ID: {ADMIN_USER_ID}")
+    print(f"  ADMIN_USERNAME: {ADMIN_USERNAME}")
+    print(f"  MAX_VARIATIONS: {MAX_VARIATIONS}")
+    print(f"  THRESHOLD_FOTOS: {THRESHOLD_FOTOS}")
     print("=" * 60)
     
     app.run_polling()
