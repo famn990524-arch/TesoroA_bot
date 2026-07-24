@@ -271,11 +271,33 @@ def aplicar_marcadores(texto, language):
         resultado = resultado.replace(marker, value)
     return resultado
 
-async def generare_variazione(model, language, frase_originale, frase_numero, variazione_num):
-    model_info = THREADS_MODELS.get(model, {"name": model, "origin": "None", "origin_text": "", "full_name": model})
-    lang_info = LANGUAGES.get(language, DEFAULT_LANGUAGES["english"])
-    frase_con_marcadores = aplicar_marcadores(frase_originale, language)
-    
+async def generare_variazione(
+    model,
+    language,
+    frase_originale,
+    frase_numero,
+    variazione_num
+):
+    model_info = THREADS_MODELS.get(
+        model,
+        {
+            "name": model,
+            "origin": "None",
+            "origin_text": "",
+            "full_name": model
+        }
+    )
+
+    lang_info = LANGUAGES.get(
+        language,
+        DEFAULT_LANGUAGES["english"]
+    )
+
+    frase_con_marcadores = aplicar_marcadores(
+        frase_originale,
+        language
+    )
+
     system_prompt = f"""You are a copywriter. Create ONE variation of the given phrase in {lang_info['name']}.
 
 CRITICAL RULES:
@@ -291,19 +313,93 @@ CRITICAL RULES:
 Original phrase: {frase_con_marcadores}
 
 Generate variation {variazione_num} in {lang_info['name']}:"""
-    
-    messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Generate variation {variazione_num}:"}]
-    headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-    payload = {"model": "deepseek-v4-flash", "messages": messages, "temperature": 0.85, "max_tokens": 800}
+
+    messages = [
+        {
+            "role": "system",
+            "content": system_prompt
+        },
+        {
+            "role": "user",
+            "content": f"Generate variation {variazione_num}:"
+        }
+    ]
+
+    headers = {
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "model": "deepseek-v4-flash",
+        "messages": messages,
+        "temperature": 0.85,
+        "max_tokens": 800,
+        "thinking": {
+            "type": "disabled"
+        }
+    }
+
+    timeout = aiohttp.ClientTimeout(total=90)
+
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=payload) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    return result['choices'][0]['message']['content'].strip()
-                return f"❌ API Error: {response.status}"
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(
+                "https://api.deepseek.com/chat/completions",
+                headers=headers,
+                json=payload
+            ) as response:
+
+                response_text = await response.text()
+
+                if response.status != 200:
+                    logger.error(
+                        "DeepSeek API error | "
+                        f"status={response.status} | "
+                        f"variation={variazione_num} | "
+                        f"response={response_text}"
+                    )
+                    return (
+                        f"❌ DeepSeek API Error "
+                        f"{response.status}: {response_text}"
+                    )
+
+                try:
+                    result = json.loads(response_text)
+                    content = result["choices"][0]["message"]["content"]
+
+                    if not content:
+                        logger.error(
+                            f"DeepSeek returned empty content: {result}"
+                        )
+                        return "❌ DeepSeek returned empty content"
+
+                    return content.strip()
+
+                except (KeyError, IndexError, json.JSONDecodeError) as e:
+                    logger.exception(
+                        "Unexpected DeepSeek response: "
+                        f"{response_text}"
+                    )
+                    return f"❌ Invalid DeepSeek response: {e}"
+
+    except asyncio.TimeoutError:
+        logger.error(
+            f"DeepSeek timeout on variation {variazione_num}"
+        )
+        return "❌ DeepSeek request timed out"
+
+    except aiohttp.ClientError as e:
+        logger.exception(
+            f"DeepSeek connection error: {e}"
+        )
+        return f"❌ DeepSeek connection error: {e}"
+
     except Exception as e:
-        return f"❌ Error: {str(e)}"
+        logger.exception(
+            f"Unexpected DeepSeek error: {e}"
+        )
+        return f"❌ Unexpected error: {e}"
 
 # ======================
 # CREACIÓN DE MODELOS (THREADS)
