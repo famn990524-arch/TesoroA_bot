@@ -294,7 +294,7 @@ Generate variation {variazione_num} in {lang_info['name']}:"""
     
     messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Generate variation {variazione_num}:"}]
     headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-    payload = {"model": "deepseek-chat", "messages": messages, "temperature": 0.85, "max_tokens": 800}
+    payload = {"model": "deepseek-v4-flash", "messages": messages, "temperature": 0.85, "max_tokens": 800}
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=payload) as response:
